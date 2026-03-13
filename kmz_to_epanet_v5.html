@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KMZ → EPANET Converter</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    :root {
+      --bg: #0a0e1a;
+      --surface: #111827;
+      --surface2: #1a2235;
+      --border: #1e3a5f;
+      --accent: #00d4ff;
+      --accent2: #0066ff;
+      --success: #00e5a0;
+      --warn: #ffb800;
+      --error: #ff4757;
+      --text: #e8f4fd;
+      --muted: #5a7a9a;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      background-image:
+        radial-gradient(ellipse 80% 60% at 50% -10%, rgba(0,102,255,0.15) 0%, transparent 60%),
+        linear-gradient(180deg, var(--bg) 0%, #060810 100%);
+    }
+
+    .page {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem 4rem;
+    }
+
+    /* ── Header ── */
+    .header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+    .header-badge {
+      display: inline-block;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      color: var(--accent);
+      border: 1px solid rgba(0,212,255,0.3);
+      padding: 0.3rem 0.9rem;
+      border-radius: 100px;
+      margin-bottom: 1.2rem;
+      background: rgba(0,212,255,0.05);
+    }
+    h1 {
+      font-family: 'Space Mono', monospace;
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      background: linear-gradient(135deg, #ffffff 20%, var(--accent) 80%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.2;
+      margin-bottom: 0.75rem;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 1rem;
+      font-weight: 300;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      margin-bottom: 1.25rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 16px;
+      padding: 1px;
+      background: linear-gradient(135deg, rgba(0,212,255,0.2), transparent 50%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+
+    .card-title {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.8rem;
+      letter-spacing: 0.15em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .card-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, var(--border), transparent);
+    }
+    .card-title .badge-optional {
+      font-size: 0.65rem;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 0.1rem 0.5rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-left: 0.25rem;
+    }
+
+    /* ── Upload Zone ── */
+    .upload-zone {
+      border: 2px dashed rgba(0,212,255,0.25);
+      border-radius: 12px;
+      padding: 3.5rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      background: rgba(0,212,255,0.03);
+      position: relative;
+    }
+    .upload-zone.compact {
+      padding: 1.75rem 2rem;
+    }
+    .upload-zone:hover,
+    .upload-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(0,212,255,0.07);
+    }
+    .upload-zone.drag-over {
+      border-color: var(--success);
+      background: rgba(0,229,160,0.07);
+    }
+    .upload-icon {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+      display: block;
+    }
+    .upload-zone.compact .upload-icon {
+      font-size: 1.6rem;
+      margin-bottom: 0.5rem;
+    }
+    .upload-zone h3 {
+      font-size: 1.05rem;
+      font-weight: 500;
+      margin-bottom: 0.4rem;
+      color: var(--text);
+    }
+    .upload-zone.compact h3 { font-size: 0.95rem; }
+    .upload-zone p {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .upload-zone .file-types {
+      margin-top: 1rem;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--accent);
+      opacity: 0.7;
+      letter-spacing: 0.1em;
+    }
+    input[type="file"] { display: none; }
+
+    /* ── Status ── */
+    .status {
+      margin-top: 1.25rem;
+      padding: 0.85rem 1.1rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      display: none;
+      align-items: center;
+      gap: 0.6rem;
+      line-height: 1.4;
+    }
+    .status.show { display: flex; }
+    .status.success { background: rgba(0,229,160,0.1); border: 1px solid rgba(0,229,160,0.3); color: var(--success); }
+    .status.error   { background: rgba(255,71,87,0.1);  border: 1px solid rgba(255,71,87,0.3);  color: var(--error); }
+    .status.loading { background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.2);  color: var(--accent); }
+    .status.warn    { background: rgba(255,184,0,0.08); border: 1px solid rgba(255,184,0,0.25); color: var(--warn); }
+
+    /* ── Stats ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+    .stat-box {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      text-align: center;
+    }
+    .stat-box.highlight {
+      border-color: rgba(0,229,160,0.35);
+      background: rgba(0,229,160,0.05);
+    }
+    .stat-val {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--accent);
+      line-height: 1;
+    }
+    .stat-box.highlight .stat-val { color: var(--success); }
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.35rem;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── SRTM Tile Tags ── */
+    .srtm-status {
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .tile-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    .tile-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      background: rgba(0,229,160,0.08);
+      border: 1px solid rgba(0,229,160,0.25);
+      color: var(--success);
+      border-radius: 6px;
+      padding: 0.3rem 0.6rem;
+    }
+    .tile-tag .tile-res {
+      color: var(--muted);
+      font-size: 0.68rem;
+    }
+    .tile-remove {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.9rem;
+      line-height: 1;
+      padding: 0 0.1rem;
+      transition: color 0.15s;
+    }
+    .tile-remove:hover { color: var(--error); }
+
+    /* ── Parameters ── */
+    .params-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1.25rem;
+    }
+    .param label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+      letter-spacing: 0.04em;
+    }
+    .param input, .param select {
+      width: 100%;
+      padding: 0.7rem 0.9rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.95rem;
+      font-family: 'Space Mono', monospace;
+      transition: border-color 0.2s;
+    }
+    .param input:focus, .param select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0,212,255,0.12);
+    }
+    .param select option { background: var(--surface2); }
+
+    /* ── Button ── */
+    .actions { display: flex; gap: 1rem; margin-top: 1.75rem; justify-content: flex-end; }
+    .btn {
+      padding: 0.8rem 1.8rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      color: #fff;
+    }
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,100,255,0.35);
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover:not(:disabled) {
+      color: var(--text);
+      border-color: var(--accent);
+    }
+
+    /* ── Warnings ── */
+    .warn-card {
+      background: rgba(255,184,0,0.04);
+      border: 1px solid rgba(255,184,0,0.2);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    .warn-card h3 {
+      font-size: 0.8rem;
+      font-family: 'Space Mono', monospace;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--warn);
+      margin-bottom: 0.9rem;
+    }
+    .warn-card ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .warn-card li {
+      color: #a0b8d0;
+      font-size: 0.88rem;
+      padding-left: 1.3rem;
+      position: relative;
+    }
+    .warn-card li::before {
+      content: '›';
+      position: absolute;
+      left: 0;
+      color: var(--warn);
+      font-weight: 700;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(0,212,255,0.3);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-badge">HYDRAULIC MODELING TOOL</div>
+    <h1>KMZ → EPANET<br>Converter</h1>
+    <p class="subtitle">Convert Google Earth network files to EPANET .inp format</p>
+  </div>
+
+  <!-- ① Upload Card -->
+  <div class="card">
+    <div class="card-title">① Upload KMZ / KML</div>
+    <div class="upload-zone" id="uploadZone">
+      <span class="upload-icon">📂</span>
+      <h3>Drop your KMZ or KML file here</h3>
+      <p>or click to browse</p>
+      <p class="file-types">.KMZ &nbsp;/&nbsp; .KML</p>
+      <input type="file" id="fileInput" accept=".kmz,.kml" />
+    </div>
+
+    <div class="status" id="statusMsg"></div>
+
+    <div class="stats-row hidden" id="statsRow">
+      <div class="stat-box">
+        <div class="stat-val" id="statNodes">0</div>
+        <div class="stat-label">Junctions</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" id="statPipes">0</div>
+        <div class="stat-label">Pipes</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" id="statLen">0</div>
+        <div class="stat-label">Total km</div>
+      </div>
+      <div class="stat-box highlight hidden" id="statElevBox">
+        <div class="stat-val" id="statElev">0</div>
+        <div class="stat-label">SRTM Elevations</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② SRTM Elevation Card -->
+  <div class="card">
+    <div class="card-title">
+      ② SRTM Elevation
+      <span class="badge-optional">optional</span>
+    </div>
+
+    <div class="upload-zone compact" id="srtmZone">
+      <span class="upload-icon">🏔</span>
+      <h3>Drop .hgt tile files here</h3>
+      <p>Automatically fills node elevations from SRTM terrain data</p>
+      <p class="file-types">.HGT &nbsp;·&nbsp; SRTM1 (30 m) &nbsp;/&nbsp; SRTM3 (90 m)</p>
+      <input type="file" id="srtmInput" accept=".hgt" multiple />
+    </div>
+
+    <div class="tile-list hidden" id="tileList"></div>
+
+    <div class="status hidden" id="srtmStatus"></div>
+
+    <div style="margin-top:1rem; font-size:0.82rem; color:var(--muted); line-height:1.6;">
+      Download free tiles from
+      <strong style="color:var(--text)">USGS EarthExplorer</strong> or
+      <strong style="color:var(--text)">OpenTopography</strong>.
+      Filename encodes location — e.g. <code style="color:var(--accent);font-family:'Space Mono',monospace;">N51E000.hgt</code> covers 51°N–52°N, 0°E–1°E.
+      Drop multiple tiles if your network spans more than one degree.
+    </div>
+  </div>
+
+  <!-- ③ Parameters Card -->
+  <div class="card">
+    <div class="card-title">③ Hydraulic Parameters</div>
+    <div class="params-grid">
+      <div class="param">
+        <label>Pipe Diameter (mm)</label>
+        <input type="number" id="pDiameter" value="300" min="1" max="5000" />
+      </div>
+      <div class="param">
+        <label>Roughness (H-W C)</label>
+        <input type="number" id="pRoughness" value="100" min="1" max="200" />
+      </div>
+      <div class="param">
+        <label>Node Demand (m³/hr)</label>
+        <input type="number" id="pDemand" value="0" step="0.1" />
+      </div>
+      <div class="param">
+        <label>Flow Units</label>
+        <select id="pUnits">
+          <option value="CMH" selected>CMH (m³/hr)</option>
+          <option value="LPS">LPS (Litres/sec)</option>
+          <option value="GPM">GPM (US gal/min)</option>
+          <option value="MGD">MGD</option>
+        </select>
+      </div>
+      <div class="param">
+        <label>Headloss Formula</label>
+        <select id="pHeadloss">
+          <option value="H-W">Hazen-Williams</option>
+          <option value="D-W">Darcy-Weisbach</option>
+          <option value="C-M">Chezy-Manning</option>
+        </select>
+      </div>
+      <div class="param">
+        <label>Default Elevation (m)</label>
+        <input type="number" id="pElev" value="0" step="0.1" />
+      </div>
+      <div class="param">
+        <label>Max Segment Length (m)</label>
+        <input type="number" id="pMaxSeg" value="500" min="50" max="5000" step="50" title="Pipes longer than this will be split with intermediate junctions" />
+      </div>
+      <div class="param">
+        <label>Elev. Split Threshold (m)</label>
+        <input type="number" id="pElevSplit" value="3" min="0.5" max="50" step="0.5" title="Insert a junction whenever elevation changes by this amount along a pipe" />
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-ghost" id="resetBtn">Reset</button>
+      <button class="btn btn-primary" id="convertBtn" disabled>
+        <span>⬇</span> Generate .inp File
+      </button>
+    </div>
+  </div>
+
+  <!-- Warnings -->
+  <div class="warn-card">
+    <h3>⚠ Post-Conversion Checklist</h3>
+    <ul>
+      <li>Verify pipe diameters — all pipes default to the value set above</li>
+      <li>Check node elevations — load SRTM tiles above for automatic enrichment, or set manually in EPANET</li>
+      <li>Add reservoirs, tanks, pumps, and valves as required</li>
+      <li>Set node demands based on actual consumption data</li>
+      <li>Check network connectivity — isolated nodes cause solver errors</li>
+      <li>Run a trial simulation and review EPANET warnings</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  State
+// ─────────────────────────────────────────────
+let network   = null; // { nodes: {id:{lon,lat,elevation}}, pipes:[{id,n1,n2,length,vertices}] }
+const srtmTiles = new Map(); // "tileLat_tileLon" → { buffer, size, tileLat, tileLon, label }
+
+// ─────────────────────────────────────────────
+//  DOM refs
+// ─────────────────────────────────────────────
+const uploadZone = document.getElementById('uploadZone');
+const fileInput  = document.getElementById('fileInput');
+const statusMsg  = document.getElementById('statusMsg');
+const statsRow   = document.getElementById('statsRow');
+const convertBtn = document.getElementById('convertBtn');
+const resetBtn   = document.getElementById('resetBtn');
+
+const srtmZone   = document.getElementById('srtmZone');
+const srtmInput  = document.getElementById('srtmInput');
+const tileList   = document.getElementById('tileList');
+const srtmStatus = document.getElementById('srtmStatus');
+const statElevBox = document.getElementById('statElevBox');
+
+// ─────────────────────────────────────────────
+//  UI helpers
+// ─────────────────────────────────────────────
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function showStatus(msg, type) {
+  const safe = escHtml(msg);
+  statusMsg.innerHTML = type === 'loading'
+    ? `<span class="spinner"></span><span>${safe}</span>`
+    : `<span>${safe}</span>`;
+  statusMsg.className = `status show ${type}`;
+}
+function hideStatus() { statusMsg.className = 'status'; }
+
+function showSrtmStatus(msg, type) {
+  srtmStatus.textContent = msg;
+  srtmStatus.className = `status show ${type}`;
+}
+function hideSrtmStatus() { srtmStatus.className = 'status hidden'; }
+
+function setStats(nodes, pipes, totalKm, elevCount) {
+  document.getElementById('statNodes').textContent = nodes;
+  document.getElementById('statPipes').textContent = pipes;
+  document.getElementById('statLen').textContent   = totalKm.toFixed(1);
+  statsRow.classList.remove('hidden');
+
+  if (elevCount > 0) {
+    document.getElementById('statElev').textContent = elevCount;
+    statElevBox.classList.remove('hidden');
+  } else {
+    statElevBox.classList.add('hidden');
+  }
+}
+
+// ─────────────────────────────────────────────
+//  KMZ upload interactions
+// ─────────────────────────────────────────────
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+resetBtn.addEventListener('click', () => {
+  network = null;
+  convertBtn.disabled = true;
+  statsRow.classList.add('hidden');
+  hideStatus();
+  fileInput.value = '';
+});
+
+convertBtn.addEventListener('click', generateINP);
+
+// FIX: Update roughness default + label when formula changes
+document.getElementById('pHeadloss').addEventListener('change', function () {
+  const ri = document.getElementById('pRoughness');
+  const rl = ri.closest('.param').querySelector('label');
+  if (this.value === 'H-W') { ri.value = 100;   ri.min = 1;     ri.max = 200; rl.textContent = 'Roughness (H-W C)'; }
+  if (this.value === 'D-W') { ri.value = 0.1;   ri.min = 0.001; ri.max = 10;  rl.textContent = 'Roughness (mm)'; }
+  if (this.value === 'C-M') { ri.value = 0.013; ri.min = 0.001; ri.max = 0.1; rl.textContent = "Manning's n"; }
+});
+
+// FIX: Update demand label when flow units change
+const demandUnitLabels = { CMH: 'm³/hr', LPS: 'L/s', GPM: 'US gal/min', MGD: 'MGD' };
+document.getElementById('pUnits').addEventListener('change', function () {
+  document.getElementById('pDemand').closest('.param').querySelector('label').textContent
+    = `Node Demand (${demandUnitLabels[this.value]})`;
+});
+
+// ─────────────────────────────────────────────
+//  SRTM upload interactions
+// ─────────────────────────────────────────────
+srtmZone.addEventListener('click', () => srtmInput.click());
+srtmZone.addEventListener('dragover', e => { e.preventDefault(); srtmZone.classList.add('drag-over'); });
+srtmZone.addEventListener('dragleave', () => srtmZone.classList.remove('drag-over'));
+srtmZone.addEventListener('drop', e => {
+  e.preventDefault();
+  srtmZone.classList.remove('drag-over');
+  if (e.dataTransfer.files.length) handleSRTMFiles(e.dataTransfer.files);
+});
+srtmInput.addEventListener('change', e => {
+  if (e.target.files.length) handleSRTMFiles(e.target.files);
+});
+
+async function handleSRTMFiles(files) {
+  let loaded = 0, failed = 0;
+  for (const file of files) {
+    try {
+      await loadSRTMTile(file);
+      loaded++;
+    } catch (e) {
+      failed++;
+      showSrtmStatus(`Error loading ${escHtml(file.name)}: ${escHtml(e.message)}`, 'error');
+    }
+  }
+
+  renderTileList();
+
+  if (loaded > 0) {
+    // If a network is already parsed, immediately enrich it
+    if (network) {
+      const count = enrichFromSRTM();
+      const nodeCount = Object.keys(network.nodes).length;
+      const totalKm = network.pipes.reduce((s, p) => s + p.length, 0) / 1000;
+      setStats(nodeCount, network.pipes.length, totalKm, count);
+      showSrtmStatus(
+        `${srtmTiles.size} tile${srtmTiles.size > 1 ? 's' : ''} loaded · ${count} of ${nodeCount} junctions enriched`,
+        'success'
+      );
+    } else {
+      showSrtmStatus(
+        `${srtmTiles.size} tile${srtmTiles.size > 1 ? 's' : ''} ready — load a KMZ to apply elevations`,
+        'success'
+      );
+    }
+  }
+
+  if (failed > 0 && loaded === 0) return; // error already shown
+  srtmInput.value = '';
+}
+
+async function loadSRTMTile(file) {
+  const name = file.name.toUpperCase().trim();
+
+  // Filename must encode SW corner: N51E000.hgt, S34W058.hgt etc.
+  const match = name.match(/^([NS])(\d{2})([EW])(\d{3})\.HGT$/);
+  if (!match) {
+    throw new Error('Filename must be in standard SRTM format, e.g. N51E000.hgt');
+  }
+
+  const tileLat = (match[1] === 'N' ? 1 : -1) * parseInt(match[2], 10);
+  const tileLon = (match[3] === 'E' ? 1 : -1) * parseInt(match[4], 10);
+
+  const buffer = await file.arrayBuffer();
+  const totalSamples = buffer.byteLength / 2; // 16-bit signed integers
+  const size = Math.round(Math.sqrt(totalSamples));
+
+  if (size !== 1201 && size !== 3601) {
+    throw new Error(`Unexpected grid size ${size}×${size} — expected 1201 (SRTM3/90m) or 3601 (SRTM1/30m)`);
+  }
+
+  const key = `${tileLat}_${tileLon}`;
+  srtmTiles.set(key, { buffer, size, tileLat, tileLon, filename: file.name });
+}
+
+function removeTile(key) {
+  srtmTiles.delete(key);
+  renderTileList();
+  if (srtmTiles.size === 0) hideSrtmStatus();
+  // Re-enrich with remaining tiles (or clear SRTM elevations if none left)
+  if (network) {
+    // Reset all node elevations to 0 then re-enrich from scratch
+    const defaultElev = parseFloat(document.getElementById('pElev').value) || 0;
+    for (const n of Object.values(network.nodes)) n.elevation = defaultElev;
+    const count = enrichFromSRTM();
+    const nodeCount = Object.keys(network.nodes).length;
+    const totalKm = network.pipes.reduce((s, p) => s + p.length, 0) / 1000;
+    setStats(nodeCount, network.pipes.length, totalKm, count);
+    if (srtmTiles.size > 0) {
+      showSrtmStatus(`${srtmTiles.size} tile${srtmTiles.size > 1 ? 's' : ''} loaded · ${count} of ${nodeCount} junctions enriched`, 'success');
+    }
+  }
+}
+
+function renderTileList() {
+  if (srtmTiles.size === 0) {
+    tileList.classList.add('hidden');
+    tileList.innerHTML = '';
+    return;
+  }
+  tileList.classList.remove('hidden');
+  tileList.innerHTML = '';
+  for (const [key, tile] of srtmTiles) {
+    const res = tile.size === 3601 ? '30m' : '90m';
+    const tag = document.createElement('div');
+    tag.className = 'tile-tag';
+    tag.innerHTML = `
+      ${escHtml(tile.filename)}
+      <span class="tile-res">${res}</span>
+      <button class="tile-remove" title="Remove tile">✕</button>
+    `;
+    tag.querySelector('.tile-remove').addEventListener('click', () => removeTile(key));
+    tileList.appendChild(tag);
+  }
+}
+
+// ─────────────────────────────────────────────
+//  SRTM elevation lookup (bilinear interpolation)
+// ─────────────────────────────────────────────
+function getSRTMElevation(lat, lon) {
+  const tileLat = Math.floor(lat);
+  const tileLon = Math.floor(lon);
+  const tile = srtmTiles.get(`${tileLat}_${tileLon}`);
+  if (!tile) return null;
+
+  const { buffer, size, tileLat: tLat, tileLon: tLon } = tile;
+  const N = size;
+  const view = new DataView(buffer);
+
+  // Sample a single grid cell; clamp to bounds; return null for voids (-32768)
+  function sample(r, c) {
+    r = Math.max(0, Math.min(N - 1, Math.round(r)));
+    c = Math.max(0, Math.min(N - 1, Math.round(c)));
+    const v = view.getInt16((r * N + c) * 2, false); // big-endian
+    return v === -32768 ? null : v;
+  }
+
+  // Fractional row/col within tile
+  // Row 0 = north edge (tLat + 1°), increases southward
+  const fracRow = (tLat + 1 - lat) * (N - 1);
+  const fracCol = (lon - tLon)      * (N - 1);
+  const r0 = Math.floor(fracRow), r1 = r0 + 1;
+  const c0 = Math.floor(fracCol), c1 = c0 + 1;
+  const dr = fracRow - r0, dc = fracCol - c0;
+
+  const v00 = sample(r0, c0), v01 = sample(r0, c1);
+  const v10 = sample(r1, c0), v11 = sample(r1, c1);
+
+  const valid = [v00, v01, v10, v11].filter(v => v !== null);
+  if (valid.length === 0) return null;
+
+  // Fall back to average of available samples if any are void
+  if (valid.length < 4) return valid.reduce((a, b) => a + b, 0) / valid.length;
+
+  // Bilinear interpolation
+  return v00 * (1 - dr) * (1 - dc)
+       + v01 * (1 - dr) * dc
+       + v10 * dr       * (1 - dc)
+       + v11 * dr       * dc;
+}
+
+// ─────────────────────────────────────────────
+//  SRTM elevation enrichment
+// ─────────────────────────────────────────────
+function enrichFromSRTM() {
+  if (!network || srtmTiles.size === 0) return 0;
+  const defaultElev = parseFloat(document.getElementById('pElev').value) || 0;
+  let count = 0;
+  for (const n of Object.values(network.nodes)) {
+    // Only overwrite nodes that still have no real elevation
+    if (n.elevation !== 0 && n.elevation !== defaultElev) continue;
+    const elev = getSRTMElevation(n.lat, n.lon);
+    if (elev !== null) {
+      n.elevation = Math.round(elev * 100) / 100;
+      count++;
+    }
+  }
+  return count;
+}
+
+// ─────────────────────────────────────────────
+//  File handling
+// ─────────────────────────────────────────────
+async function handleFile(file) {
+  const name = file.name.toLowerCase();
+  if (!name.endsWith('.kml') && !name.endsWith('.kmz')) {
+    showStatus('Please select a .kml or .kmz file.', 'error');
+    return;
+  }
+
+  showStatus('Reading file…', 'loading');
+  convertBtn.disabled = true;
+  statsRow.classList.add('hidden');
+  network = null;
+
+  try {
+    let kmlText;
+    if (name.endsWith('.kmz')) {
+      kmlText = await extractKMLFromKMZ(file);
+    } else {
+      kmlText = await file.text();
+    }
+
+    network = parseKML(kmlText);
+
+    const nodeCount = Object.keys(network.nodes).length;
+    const pipeCount = network.pipes.length;
+
+    if (nodeCount === 0 && pipeCount === 0) {
+      throw new Error('No LineStrings or Points found in the KML. Make sure your file contains polylines or point placemarks.');
+    }
+
+    // Enrich from SRTM if tiles are already loaded
+    const elevCount = enrichFromSRTM();
+
+    const totalKm = network.pipes.reduce((s, p) => s + p.length, 0) / 1000;
+    setStats(nodeCount, pipeCount, totalKm, elevCount);
+
+    let msg = `✓ Parsed — ${nodeCount} junctions, ${pipeCount} pipes, ${totalKm.toFixed(1)} km total`;
+    if (elevCount > 0) {
+      msg += ` · ${elevCount} elevations from SRTM`;
+    } else if (srtmTiles.size > 0) {
+      msg += ` · no SRTM coverage for this area`;
+    } else {
+      msg += ` · load SRTM tiles to enrich elevations`;
+    }
+
+    const msgType = (srtmTiles.size > 0 && elevCount === 0) ? 'warn' : 'success';
+    showStatus(msg, msgType);
+    convertBtn.disabled = false;
+
+  } catch (err) {
+    showStatus(`Error: ${err.message}`, 'error');
+    console.error(err);
+  }
+}
+
+// ─────────────────────────────────────────────
+//  KMZ extraction
+// ─────────────────────────────────────────────
+async function extractKMLFromKMZ(file) {
+  let zip;
+  try {
+    zip = await JSZip.loadAsync(file);
+  } catch (e) {
+    throw new Error('Could not open KMZ file — is it a valid ZIP/KMZ archive?');
+  }
+
+  const kmlFiles = Object.keys(zip.files).filter(n => n.toLowerCase().endsWith('.kml'));
+  if (kmlFiles.length === 0) throw new Error('No .kml file found inside the KMZ archive.');
+
+  const preferred = kmlFiles.find(n => n.toLowerCase() === 'doc.kml') || kmlFiles[0];
+  return await zip.files[preferred].async('string');
+}
+
+// ─────────────────────────────────────────────
+//  KML parser
+// ─────────────────────────────────────────────
+function parseKML(kmlText) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(kmlText, 'application/xml');
+
+  const parseErr = doc.querySelector('parsererror');
+  if (parseErr) throw new Error('KML XML is malformed: ' + parseErr.textContent.substring(0, 120));
+
+  const defaultElev = parseFloat(document.getElementById('pElev').value) || 0;
+  const TOLERANCE = 0.00001; // ~1.1 m at equator
+
+  const nodes = {};
+  const nodeIndex = new Map(); // grid-key → id for O(1) proximity lookup
+  const pipes = [];
+  let nIdx = 1, pIdx = 1;
+
+  function parseCoords(text) {
+    const result = [];
+    for (const t of text.trim().split(/\s+/)) {
+      if (!t) continue;
+      const p = t.split(',').map(parseFloat);
+      if (p.length >= 2 && !isNaN(p[0]) && !isNaN(p[1])) {
+        result.push({
+          lon: p[0], lat: p[1],
+          elev: (p.length >= 3 && !isNaN(p[2]) && p[2] !== 0) ? p[2] : defaultElev
+        });
+      }
+    }
+    return result;
+  }
+
+  function getOrCreate(lon, lat, elev) {
+    const gx = Math.round(lon / TOLERANCE);
+    const gy = Math.round(lat / TOLERANCE);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const existing = nodeIndex.get(`${gx + dx}_${gy + dy}`);
+        if (existing !== undefined) {
+          const n = nodes[existing];
+          if (Math.abs(n.lon - lon) < TOLERANCE && Math.abs(n.lat - lat) < TOLERANCE) {
+            if ((n.elevation === defaultElev || n.elevation === 0) && elev !== defaultElev && elev !== 0)
+              n.elevation = elev;
+            return existing;
+          }
+        }
+      }
+    }
+    const id = 'J' + nIdx++;
+    nodes[id] = { lon, lat, elevation: elev };
+    nodeIndex.set(`${gx}_${gy}`, id);
+    return id;
+  }
+
+  function dist(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const f1 = lat1 * Math.PI / 180, f2 = lat2 * Math.PI / 180;
+    const df = (lat2 - lat1) * Math.PI / 180, dl = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(df/2)**2 + Math.cos(f1)*Math.cos(f2)*Math.sin(dl/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  // ════════════════════════════════════════════
+  // PASS 1 — Build raw pipe list from LineStrings.
+  // Only start and end become junction nodes here.
+  // ════════════════════════════════════════════
+  const rawPipes = [];
+
+  for (const ls of doc.getElementsByTagName('LineString')) {
+    const coordEl = ls.getElementsByTagName('coordinates')[0];
+    if (!coordEl) continue;
+
+    const coords = parseCoords(coordEl.textContent);
+    if (coords.length < 2) continue;
+
+    const n1 = getOrCreate(coords[0].lon, coords[0].lat, coords[0].elev);
+    const n2 = getOrCreate(coords[coords.length-1].lon, coords[coords.length-1].lat, coords[coords.length-1].elev);
+    if (n1 === n2) continue;
+
+    let totalLen = 0;
+    const segLens = [];
+    for (let i = 0; i < coords.length - 1; i++) {
+      const d = dist(coords[i].lat, coords[i].lon, coords[i+1].lat, coords[i+1].lon);
+      segLens.push(d);
+      totalLen += d;
+    }
+    if (totalLen < 0.01) continue;
+
+    rawPipes.push({ n1, n2, coords, segLens, totalLen });
+  }
+
+  // ════════════════════════════════════════════
+  // PASS 2 — Snap Point placemarks to nearest node and apply their elevation.
+  // Runs before pipe splitting so endpoint elevations influence split decisions.
+  // ════════════════════════════════════════════
+  const ELEV_SNAP_M = 50;
+
+  for (const pt of doc.getElementsByTagName('Point')) {
+    const coordEl = pt.getElementsByTagName('coordinates')[0];
+    if (!coordEl) continue;
+
+    const coords = parseCoords(coordEl.textContent);
+    if (coords.length === 0) continue;
+    const pc = coords[0];
+
+    let pointElev = (pc.elev !== defaultElev && pc.elev !== 0) ? pc.elev : null;
+
+    if (pointElev === null) {
+      let placemark = pt.parentNode;
+      while (placemark && placemark.tagName !== 'Placemark') placemark = placemark.parentNode;
+
+      if (placemark) {
+        const nameEl = placemark.getElementsByTagName('name')[0];
+        const descEl = placemark.getElementsByTagName('description')[0];
+        const text = ((nameEl ? nameEl.textContent : '') + ' ' + (descEl ? descEl.textContent : '')).trim();
+
+        const labelledMatch = text.match(/(?:elev(?:ation)?|rl|z|el)[\s=:.]*([+-]?\d+(?:\.\d+)?)/i);
+        if (labelledMatch) {
+          pointElev = parseFloat(labelledMatch[1]);
+        } else {
+          const plainMatch = text.match(/^([+-]?\d+(?:\.\d+)?)\s*m?\s*$/i);
+          if (plainMatch) {
+            pointElev = parseFloat(plainMatch[1]);
+          } else {
+            const anyNumMatch = text.match(/([+-]?\d{2,4}(?:\.\d+)?)\s*m/i);
+            if (anyNumMatch) pointElev = parseFloat(anyNumMatch[1]);
+          }
+        }
+      }
+    }
+
+    if (pointElev === null) continue;
+
+    let bestId = null, bestDist = Infinity;
+    for (const [id, n] of Object.entries(nodes)) {
+      const d = dist(pc.lat, pc.lon, n.lat, n.lon);
+      if (d < bestDist) { bestDist = d; bestId = id; }
+    }
+
+    if (bestId && bestDist <= ELEV_SNAP_M) {
+      if (nodes[bestId].elevation === defaultElev || nodes[bestId].elevation === 0) {
+        nodes[bestId].elevation = pointElev;
+      }
+    }
+  }
+
+  // ════════════════════════════════════════════
+  // PASS 3 — Split pipes by max segment length and elevation change.
+  // Uses endpoint node elevation (updated by PASS 2) as the split baseline.
+  // ════════════════════════════════════════════
+  const maxSegLen    = parseFloat(document.getElementById('pMaxSeg').value)    || 500;
+  const elevSplitThr = parseFloat(document.getElementById('pElevSplit').value) || 3;
+
+  for (const rp of rawPipes) {
+    const { coords, segLens } = rp;
+    const splitIndices = [0];
+
+    let distSinceSplit = 0;
+    // Seed with node elevation from PASS 2 if available; fall back to raw coord
+    const startNodeElev = nodes[rp.n1].elevation;
+    let elevAtLastSplit = (startNodeElev !== 0 && startNodeElev !== defaultElev)
+      ? startNodeElev : coords[0].elev;
+
+    for (let i = 0; i < segLens.length; i++) {
+      distSinceSplit += segLens[i];
+      const elevHere = coords[i + 1].elev;
+      const elevChange = Math.abs(elevHere - elevAtLastSplit);
+      const hasRealElev = elevHere !== 0 && elevHere !== defaultElev;
+
+      if (distSinceSplit >= maxSegLen || (hasRealElev && elevChange >= elevSplitThr)) {
+        splitIndices.push(i + 1);
+        distSinceSplit = 0;
+        elevAtLastSplit = elevHere;
+      }
+    }
+
+    if (splitIndices[splitIndices.length - 1] !== coords.length - 1)
+      splitIndices.push(coords.length - 1);
+
+    for (let s = 0; s < splitIndices.length - 1; s++) {
+      const iStart = splitIndices[s];
+      const iEnd   = splitIndices[s + 1];
+      const c1 = coords[iStart], c2 = coords[iEnd];
+
+      const interpElev = (c2.elev !== 0 && c2.elev !== defaultElev) ? c2.elev : defaultElev;
+
+      const nodeId1 = (s === 0)
+        ? rp.n1
+        : getOrCreate(c1.lon, c1.lat, (c1.elev !== 0 && c1.elev !== defaultElev) ? c1.elev : defaultElev);
+      const nodeId2 = (s === splitIndices.length - 2)
+        ? rp.n2
+        : getOrCreate(c2.lon, c2.lat, interpElev);
+
+      if (nodeId1 === nodeId2) continue;
+
+      let subLen = 0;
+      for (let k = iStart; k < iEnd; k++) subLen += segLens[k];
+      if (subLen < 0.01) continue;
+
+      const vertices = [];
+      for (let k = iStart + 1; k < iEnd; k++)
+        vertices.push({ lon: coords[k].lon, lat: coords[k].lat });
+
+      pipes.push({ id: 'P' + pIdx++, n1: nodeId1, n2: nodeId2, length: subLen, vertices });
+    }
+  }
+
+  return { nodes, pipes };
+}
+
+// ─────────────────────────────────────────────
+//  EPANET .inp generator
+// ─────────────────────────────────────────────
+function generateINP() {
+  if (!network) return;
+
+  const diameter  = document.getElementById('pDiameter').value;
+  const roughness = document.getElementById('pRoughness').value;
+  const demand    = document.getElementById('pDemand').value;
+  const units     = document.getElementById('pUnits').value;
+  const headloss  = document.getElementById('pHeadloss').value;
+  const now       = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+  let roughnessLabel = 'Roughness';
+  if (headloss === 'D-W') roughnessLabel = 'Roughness(mm)';
+  else if (headloss === 'C-M') roughnessLabel = 'N-value   ';
+
+  let s = '';
+
+  s += `[TITLE]\n`;
+  s += `Network converted from KMZ/KML\n`;
+  s += `Generated: ${now}\n`;
+  s += `Junctions: ${Object.keys(network.nodes).length}  Pipes: ${network.pipes.length}\n\n`;
+
+  s += `[JUNCTIONS]\n`;
+  s += `;ID             \tElev    \tDemand  \tPattern\n`;
+  for (const [id, n] of Object.entries(network.nodes))
+    s += `${id.padEnd(16)}\t${n.elevation.toFixed(2)}\t${demand}\t\n`;
+  s += `\n`;
+
+  s += `[RESERVOIRS]\n`;
+  s += `;ID             \tHead    \tPattern\n`;
+  s += `;(Add reservoirs manually)\n\n`;
+
+  s += `[TANKS]\n`;
+  s += `;ID             \tElevation\tInitLevel\tMinLevel\tMaxLevel\tDiameter\tMinVol\tVolCurve\n`;
+  s += `;(Add tanks manually)\n\n`;
+
+  s += `[PIPES]\n`;
+  s += `;ID             \tNode1           \tNode2           \tLength  \tDiameter\t${roughnessLabel}\tMinorLoss\tStatus\n`;
+  for (const p of network.pipes)
+    s += `${p.id.padEnd(16)}\t${p.n1.padEnd(16)}\t${p.n2.padEnd(16)}\t${p.length.toFixed(2)}\t${diameter}\t${roughness}\t0\tOpen\n`;
+  s += `\n`;
+
+  s += `[PUMPS]\n`;
+  s += `;ID             \tNode1           \tNode2           \tParameters\n`;
+  s += `;(Add pumps manually)\n\n`;
+
+  s += `[VALVES]\n`;
+  s += `;ID             \tNode1           \tNode2           \tDiameter\tType\tSetting\tMinorLoss\n`;
+  s += `;(Add valves manually)\n\n`;
+
+  s += `[TAGS]\n\n`;
+
+  s += `[DEMANDS]\n`;
+  s += `;Junction       \tDemand  \tPattern\t;Category\n\n`;
+
+  s += `[STATUS]\n`;
+  s += `;ID             \tStatus/Setting\n\n`;
+
+  // Flat 24-hour demand pattern (satisfies the Pattern=1 reference in [OPTIONS])
+  s += `[PATTERNS]\n`;
+  s += `;ID             \tMultipliers\n`;
+  s += `1               \t1.0  1.0  1.0  1.0  1.0  1.0\n`;
+  s += `1               \t1.0  1.0  1.0  1.0  1.0  1.0\n`;
+  s += `1               \t1.0  1.0  1.0  1.0  1.0  1.0\n`;
+  s += `1               \t1.0  1.0  1.0  1.0  1.0  1.0\n\n`;
+
+  s += `[CURVES]\n`;
+  s += `;ID             \tX-Value\tY-Value\n\n`;
+
+  s += `[CONTROLS]\n\n`;
+
+  s += `[RULES]\n\n`;
+
+  s += `[ENERGY]\n`;
+  s += `Global Efficiency\t75\n`;
+  s += `Global Price     \t0\n`;
+  s += `Demand Charge    \t0\n\n`;
+
+  s += `[EMITTERS]\n`;
+  s += `;Junction       \tCoefficient\n\n`;
+
+  s += `[QUALITY]\n`;
+  s += `;Node           \tInitQual\n\n`;
+
+  s += `[SOURCES]\n`;
+  s += `;Node           \tType\tQuality\tPattern\n\n`;
+
+  s += `[REACTIONS]\n`;
+  s += `;Type\tPipe/Tank\tCoefficient\n`;
+  s += `Order Bulk\t1\n`;
+  s += `Order Tank\t1\n`;
+  s += `Order Wall\t1\n`;
+  s += `Global Bulk\t0\n`;
+  s += `Global Wall\t0\n`;
+  s += `Limiting Potential\t0\n`;
+  s += `Roughness Correlation\t0\n\n`;
+
+  s += `[MIXING]\n`;
+  s += `;Tank           \tModel\n\n`;
+
+  s += `[TIMES]\n`;
+  s += `Duration           \t24:00\n`;
+  s += `Hydraulic Timestep \t1:00\n`;
+  s += `Quality Timestep   \t0:05\n`;
+  s += `Pattern Timestep   \t1:00\n`;
+  s += `Pattern Start      \t0:00\n`;
+  s += `Report Timestep    \t1:00\n`;
+  s += `Report Start       \t0:00\n`;
+  s += `Start ClockTime    \t12 am\n`;
+  s += `Statistic          \tNone\n\n`;
+
+  s += `[REPORT]\n`;
+  s += `Status\tFull\n`;
+  s += `Summary\tYes\n`;
+  s += `Page\t0\n\n`;
+
+  s += `[OPTIONS]\n`;
+  s += `Units              \t${units}\n`;
+  s += `Headloss           \t${headloss}\n`;
+  s += `Specific Gravity   \t1\n`;
+  s += `Viscosity          \t1\n`;
+  s += `Trials             \t40\n`;
+  s += `Accuracy           \t0.001\n`;
+  s += `CHECKFREQ          \t2\n`;
+  s += `MAXCHECK           \t10\n`;
+  s += `DAMPLIMIT          \t0\n`;
+  s += `Unbalanced         \tContinue 10\n`;
+  s += `Pattern            \t1\n`;
+  s += `Demand Multiplier  \t1.0\n`;
+  s += `Emitter Exponent   \t0.5\n`;
+  s += `Quality            \tNone mg/L\n`;
+  s += `Diffusivity        \t1\n`;
+  s += `Tolerance          \t0.01\n\n`;
+
+  // Bounding box with 5% padding
+  const allNodes = Object.values(network.nodes);
+  const minX = Math.min(...allNodes.map(n => n.lon));
+  const maxX = Math.max(...allNodes.map(n => n.lon));
+  const minY = Math.min(...allNodes.map(n => n.lat));
+  const maxY = Math.max(...allNodes.map(n => n.lat));
+  const padX = Math.max((maxX - minX) * 0.05, 0.001);
+  const padY = Math.max((maxY - minY) * 0.05, 0.001);
+
+  s += `[COORDINATES]\n`;
+  s += `;Node           \tX-Coord         \tY-Coord\n`;
+  for (const [id, n] of Object.entries(network.nodes))
+    s += `${id.padEnd(16)}\t${n.lon.toFixed(6)}\t${n.lat.toFixed(6)}\n`;
+  s += `\n`;
+
+  s += `[VERTICES]\n`;
+  s += `;Link           \tX-Coord         \tY-Coord\n`;
+  for (const p of network.pipes) {
+    if (p.vertices && p.vertices.length > 0) {
+      for (const v of p.vertices)
+        s += `${p.id.padEnd(16)}\t${v.lon.toFixed(6)}\t${v.lat.toFixed(6)}\n`;
+    }
+  }
+  s += `\n`;
+
+  s += `[LABELS]\n`;
+  s += `;X-Coord\tY-Coord\tLabel & Anchor Node\n\n`;
+
+  s += `[BACKDROP]\n`;
+  s += `DIMENSIONS\t${(minX - padX).toFixed(6)}\t${(minY - padY).toFixed(6)}\t${(maxX + padX).toFixed(6)}\t${(maxY + padY).toFixed(6)}\n`;
+  s += `UNITS\tDegrees\n`;
+  s += `FILE\t\n`;
+  s += `OFFSET\t0\t0\n\n`;
+
+  s += `[END]\n`;
+
+  const blob = new Blob([s], { type: 'text/plain;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'network.inp';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showStatus('✓ network.inp downloaded! Open it in EPANET 2 or EPANET 2.2.', 'success');
+}
+</script>
+</body>
+</html>
