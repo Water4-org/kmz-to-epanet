@@ -1,0 +1,3026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HydroForge</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    :root {
+      --bg: #0a0e1a;
+      --surface: #111827;
+      --surface2: #1a2235;
+      --border: #1e3a5f;
+      --accent: #00d4ff;
+      --accent2: #0066ff;
+      --success: #00e5a0;
+      --warn: #ffb800;
+      --error: #ff4757;
+      --text: #e8f4fd;
+      --muted: #5a7a9a;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      background-image:
+        radial-gradient(ellipse 80% 60% at 50% -10%, rgba(0,102,255,0.15) 0%, transparent 60%),
+        linear-gradient(180deg, var(--bg) 0%, #060810 100%);
+    }
+
+    .page {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem 4rem;
+    }
+
+    /* ── Header ── */
+    .header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+    .header-badge {
+      display: inline-block;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      color: var(--accent);
+      border: 1px solid rgba(0,212,255,0.3);
+      padding: 0.3rem 0.9rem;
+      border-radius: 100px;
+      margin-bottom: 1.2rem;
+      background: rgba(0,212,255,0.05);
+    }
+    h1 {
+      font-family: 'Space Mono', monospace;
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      background: linear-gradient(135deg, #ffffff 20%, var(--accent) 80%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.2;
+      margin-bottom: 0.75rem;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 1rem;
+      font-weight: 300;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      margin-bottom: 1.25rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 16px;
+      padding: 1px;
+      background: linear-gradient(135deg, rgba(0,212,255,0.2), transparent 50%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+
+    .card-title {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.8rem;
+      letter-spacing: 0.15em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .card-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, var(--border), transparent);
+    }
+    .card-title .badge-optional {
+      font-size: 0.65rem;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 0.1rem 0.5rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-left: 0.25rem;
+    }
+
+    /* ── Collapsible Card ── */
+    .card-title.collapsible {
+      cursor: pointer;
+      user-select: none;
+    }
+    .card-title.collapsible .collapse-arrow {
+      transition: transform 0.25s ease;
+      font-size: 0.7rem;
+      margin-left: auto;
+      color: var(--muted);
+    }
+    .card.collapsed .card-title.collapsible .collapse-arrow {
+      transform: rotate(-90deg);
+    }
+    .card-body-collapsible {
+      overflow: hidden;
+      max-height: 800px;
+      transition: max-height 0.35s ease, opacity 0.25s ease;
+      opacity: 1;
+    }
+    .card.collapsed .card-body-collapsible {
+      max-height: 0;
+      opacity: 0;
+    }
+
+    /* ── Upload Zone ── */
+    .upload-zone {
+      border: 2px dashed rgba(0,212,255,0.25);
+      border-radius: 12px;
+      padding: 3.5rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      background: rgba(0,212,255,0.03);
+      position: relative;
+    }
+    .upload-zone.compact {
+      padding: 1.75rem 2rem;
+    }
+    .upload-zone:hover,
+    .upload-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(0,212,255,0.07);
+    }
+    .upload-zone.drag-over {
+      border-color: var(--success);
+      background: rgba(0,229,160,0.07);
+    }
+    .upload-icon {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+      display: block;
+    }
+    .upload-zone.compact .upload-icon {
+      font-size: 1.6rem;
+      margin-bottom: 0.5rem;
+    }
+    .upload-zone h3 {
+      font-size: 1.05rem;
+      font-weight: 500;
+      margin-bottom: 0.4rem;
+      color: var(--text);
+    }
+    .upload-zone.compact h3 { font-size: 0.95rem; }
+    .upload-zone p {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .upload-zone .file-types {
+      margin-top: 1rem;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--accent);
+      opacity: 0.7;
+      letter-spacing: 0.1em;
+    }
+    input[type="file"] { display: none; }
+
+    /* ── Status ── */
+    .status {
+      margin-top: 1.25rem;
+      padding: 0.85rem 1.1rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      display: none;
+      align-items: center;
+      gap: 0.6rem;
+      line-height: 1.4;
+    }
+    .status.show { display: flex; }
+    .status.success { background: rgba(0,229,160,0.1); border: 1px solid rgba(0,229,160,0.3); color: var(--success); }
+    .status.error   { background: rgba(255,71,87,0.1);  border: 1px solid rgba(255,71,87,0.3);  color: var(--error); }
+    .status.loading { background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.2);  color: var(--accent); }
+    .status.warn    { background: rgba(255,184,0,0.08); border: 1px solid rgba(255,184,0,0.25); color: var(--warn); }
+
+    /* ── Stats ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+    .stat-box {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      text-align: center;
+    }
+    .stat-box.highlight {
+      border-color: rgba(0,229,160,0.35);
+      background: rgba(0,229,160,0.05);
+    }
+    .stat-val {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--accent);
+      line-height: 1;
+    }
+    .stat-box.highlight .stat-val { color: var(--success); }
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.35rem;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── SRTM Tile Tags ── */
+    .srtm-status {
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .tile-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    .tile-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      background: rgba(0,229,160,0.08);
+      border: 1px solid rgba(0,229,160,0.25);
+      color: var(--success);
+      border-radius: 6px;
+      padding: 0.3rem 0.6rem;
+    }
+    .tile-tag .tile-res {
+      color: var(--muted);
+      font-size: 0.68rem;
+    }
+    .tile-remove {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.9rem;
+      line-height: 1;
+      padding: 0 0.1rem;
+      transition: color 0.15s;
+    }
+    .tile-remove:hover { color: var(--error); }
+
+    /* ── Parameters ── */
+    .params-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1.25rem;
+    }
+    .param label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+      letter-spacing: 0.04em;
+    }
+    .param input, .param select {
+      width: 100%;
+      padding: 0.7rem 0.9rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.95rem;
+      font-family: 'Space Mono', monospace;
+      transition: border-color 0.2s;
+    }
+    .param input:focus, .param select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0,212,255,0.12);
+    }
+    .param select option { background: var(--surface2); }
+
+    /* ── Checkbox toggle ── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-top: 1.1rem;
+    }
+    .toggle-row input[type="checkbox"] {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .toggle-row label {
+      font-size: 0.85rem;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    /* ── Button ── */
+    .actions { display: flex; gap: 1rem; margin-top: 1.75rem; justify-content: flex-end; }
+    .btn {
+      padding: 0.8rem 1.8rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      color: #fff;
+    }
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,100,255,0.35);
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover:not(:disabled) {
+      color: var(--text);
+      border-color: var(--accent);
+    }
+
+    /* ── Warnings ── */
+    .warn-card {
+      background: rgba(255,184,0,0.04);
+      border: 1px solid rgba(255,184,0,0.2);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    .warn-card h3 {
+      font-size: 0.8rem;
+      font-family: 'Space Mono', monospace;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--warn);
+      margin-bottom: 0.9rem;
+    }
+    .warn-card ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .warn-card li {
+      color: #a0b8d0;
+      font-size: 0.88rem;
+      padding-left: 1.3rem;
+      position: relative;
+    }
+    .warn-card li::before {
+      content: '›';
+      position: absolute;
+      left: 0;
+      color: var(--warn);
+      font-weight: 700;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(0,212,255,0.3);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .hidden { display: none !important; }
+
+    /* ── Color Map Rows ── */
+    .color-row {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      margin-bottom: 0.6rem;
+    }
+    .color-swatch {
+      width: 28px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1px solid rgba(255,255,255,0.15);
+      flex-shrink: 0;
+    }
+    .color-label {
+      flex: 1;
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+    }
+    .color-diam-input {
+      width: 80px;
+      padding: 0.3rem 0.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.9rem;
+      font-family: 'Space Mono', monospace;
+      text-align: right;
+    }
+    .color-diam-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* ── Toggle Row ── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-top: 1.25rem;
+      padding: 0.75rem 1rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .toggle-row input[type="checkbox"] {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .toggle-row label {
+      font-size: 0.88rem;
+      color: var(--text);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    #mapPreview {
+      width: 100%;
+      height: 440px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    .map-legend {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem 1.1rem;
+      margin-top: 0.8rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .map-legend .legend-item { display: inline-flex; align-items: center; gap: 0.4rem; }
+    .legend-line { width: 18px; height: 4px; border-radius: 2px; display: inline-block; }
+    .legend-dot  { width: 10px; height: 10px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,0.6); }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-badge">HYDRAULIC MODELING TOOL</div>
+    <h1>HydroForge</h1>
+    <p class="subtitle">From Google Earth field drawings to EPANET hydraulic models</p>
+  </div>
+
+  <!-- ① Upload Card -->
+  <div class="card">
+    <div class="card-title">① Upload KMZ / KML</div>
+    <div class="upload-zone" id="uploadZone">
+      <span class="upload-icon">📂</span>
+      <h3>Drop your KMZ or KML file here</h3>
+      <p>or click to browse</p>
+      <p class="file-types">.KMZ &nbsp;/&nbsp; .KML</p>
+      <input type="file" id="fileInput" accept=".kmz,.kml" />
+    </div>
+
+    <div class="status" id="statusMsg"></div>
+
+    <div class="stats-row hidden" id="statsRow">
+      <div class="stat-box">
+        <div class="stat-val" id="statNodes">0</div>
+        <div class="stat-label">Junctions</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" id="statPipes">0</div>
+        <div class="stat-label">Pipes</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" id="statLen">0</div>
+        <div class="stat-label">Total km</div>
+      </div>
+      <div class="stat-box highlight hidden" id="statElevBox">
+        <div class="stat-val" id="statElev">0</div>
+        <div class="stat-label" id="statElevLabel">Elevations</div>
+      </div>
+      <div class="stat-box highlight hidden" id="statTankBox">
+        <div class="stat-val" id="statTanks">0</div>
+        <div class="stat-label">Tanks (auto)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Satellite Preview Card (appears after a file is parsed) -->
+  <div class="card hidden" id="previewCard">
+    <div class="card-title">
+      🛰 Satellite Preview
+      <span class="badge-optional">visual QA — check the network before export</span>
+    </div>
+    <div id="mapPreview"></div>
+    <div class="map-legend" id="mapLegend"></div>
+  </div>
+
+  <!-- ② SRTM Elevation Card (collapsed by default) -->
+  <div class="card collapsed" id="srtmCard">
+    <div class="card-title collapsible" id="srtmCardToggle">
+      ② SRTM Elevation
+      <span class="badge-optional">optional — higher accuracy</span>
+      <span class="collapse-arrow">▼</span>
+    </div>
+
+    <div class="card-body-collapsible">
+      <div class="upload-zone compact" id="srtmZone">
+        <span class="upload-icon">🏔</span>
+        <h3>Drop .hgt tile files here</h3>
+        <p>Automatically fills node elevations from SRTM terrain data</p>
+        <p class="file-types">.HGT &nbsp;·&nbsp; SRTM1 (30 m) &nbsp;/&nbsp; SRTM3 (90 m)</p>
+        <input type="file" id="srtmInput" accept=".hgt" multiple />
+      </div>
+
+      <div class="toggle-row">
+        <input type="checkbox" id="autoElevToggle" checked />
+        <label for="autoElevToggle">Auto-fetch elevations from Google Elevation API (high accuracy)</label>
+      </div>
+
+      <div class="tile-list hidden" id="tileList"></div>
+
+      <div class="status hidden" id="srtmStatus"></div>
+
+      <div style="margin-top:1rem; font-size:0.82rem; color:var(--muted); line-height:1.6;">
+        Download free tiles from
+        <strong style="color:var(--text)">USGS EarthExplorer</strong> or
+        <strong style="color:var(--text)">OpenTopography</strong>.
+        Filename encodes location — e.g. <code style="color:var(--accent);font-family:'Space Mono',monospace;">N51E000.hgt</code> covers 51°N–52°N, 0°E–1°E.
+        Drop multiple tiles if your network spans more than one degree.
+        <br>Automatic elevation fallback powered by <strong style="color:var(--text)">Google Elevation API</strong>.
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ Parameters Card -->
+  <div class="card">
+    <div class="card-title">③ Hydraulic Parameters</div>
+    <div class="params-grid">
+      <div class="param">
+        <label>Pipe Diameter (mm)</label>
+        <input type="number" id="pDiameter" value="300" min="1" max="5000" />
+      </div>
+      <div class="param">
+        <label>Roughness (H-W C)</label>
+        <input type="number" id="pRoughness" value="145" min="1" max="200" title="145 (HDPE/Steel, Hazen-Williams)" />
+      </div>
+      <div class="param">
+        <label>Node Demand (m³/hr)</label>
+        <input type="number" id="pDemand" value="0" step="0.1" />
+      </div>
+      <div class="param">
+        <label>Flow Units</label>
+        <select id="pUnits">
+          <option value="CMH" selected>CMH (m³/hr)</option>
+          <option value="LPS">LPS (Litres/sec)</option>
+          <option value="GPM">GPM (US gal/min)</option>
+          <option value="MGD">MGD</option>
+        </select>
+      </div>
+      <div class="param">
+        <label>Headloss Formula</label>
+        <select id="pHeadloss">
+          <option value="H-W">Hazen-Williams</option>
+          <option value="D-W">Darcy-Weisbach</option>
+          <option value="C-M">Chezy-Manning</option>
+        </select>
+      </div>
+      <div class="param">
+        <label>Max Segment Length (m)</label>
+        <input type="number" id="pMaxSeg" value="500" min="50" max="5000" step="50" title="Pipes longer than this will be split with intermediate junctions" />
+      </div>
+      <div class="param">
+        <label>Elev. Split Threshold (m)</label>
+        <input type="number" id="pElevSplit" value="3" min="0.5" max="50" step="0.5" title="Insert a junction whenever elevation changes by this amount along a pipe" />
+      </div>
+      <div class="param">
+        <label>Junction Snap Tol. (m)</label>
+        <input type="number" id="pSnapTol" value="2" min="0.1" max="20" step="0.1" title="Snap tolerance for T-junction and intersection detection" />
+      </div>
+      <div class="param">
+        <label>Tank Connect Max (m)</label>
+        <input type="number" id="pTankMaxDist" value="500" min="10" max="5000" step="10"
+               title="Max distance to auto-connect a detected water tower to the nearest pipe" />
+      </div>
+      <!-- Tank Parameters -->
+      <div class="param" style="grid-column:1/-1">
+        <label style="font-weight:600;color:var(--accent);letter-spacing:0.05em;font-size:0.78rem">
+          TANK DEFAULTS (for auto-detected water towers)
+        </label>
+      </div>
+      <div class="param">
+        <label>Tank Size Preset</label>
+        <select id="pTankPreset" style="width:100%;padding:0.6rem 0.8rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.9rem;">
+          <option value="10000">10,000 L (standard)</option>
+          <option value="8500">8,500 L</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+      <div class="param">
+        <label>Init Level (m)</label>
+        <input type="number" id="pTankInit" value="7.0" step="0.1" min="0" max="50" />
+      </div>
+      <div class="param">
+        <label>Min Level (m)</label>
+        <input type="number" id="pTankMin" value="5.3" step="0.1" min="0" max="50" />
+      </div>
+      <div class="param">
+        <label>Max Level (m)</label>
+        <input type="number" id="pTankMax" value="7.3" step="0.1" min="0" max="50" />
+      </div>
+      <div class="param">
+        <label>Diameter (m)</label>
+        <input type="number" id="pTankDiam" value="2.4" step="0.1" min="0.1" max="20" />
+      </div>
+    </div>
+    <div class="toggle-row">
+      <input type="checkbox" id="backdropToggle" checked />
+      <label for="backdropToggle">Also download a satellite backdrop image (BMP) that EPANET displays behind the network — requires "Maps Static API" enabled on your key</label>
+    </div>
+    <div class="actions">
+      <button class="btn btn-ghost" id="resetBtn">Reset</button>
+      <button class="btn btn-ghost hidden" id="zipBtn" title="Bundle the .inp and backdrop into one .zip so they stay together when moved or emailed">
+        <span>🗜</span> Download as ZIP
+      </button>
+      <button class="btn btn-primary" id="convertBtn" disabled>
+        <span>⬇</span> Generate .inp File
+      </button>
+    </div>
+  </div>
+
+  <!-- ④ Color → Diameter Mapping Card -->
+  <div class="card collapsed hidden" id="colorMapCard">
+    <div class="card-title collapsible" id="colorMapToggle">
+      ④ Color → Diameter
+      <span class="badge-optional">auto-detected</span>
+      <span class="collapse-arrow">▼</span>
+    </div>
+    <div class="card-body-collapsible" id="colorMapBody">
+      <p style="font-size:0.82rem;color:var(--muted);margin-bottom:1rem;line-height:1.6;">
+        Assign pipe diameters by line color. Colors were detected from your KML file.
+        Pipes with no color use the default diameter from Hydraulic Parameters above.
+      </p>
+      <div id="colorMapTable"></div>
+    </div>
+  </div>
+
+  <!-- Warnings -->
+  <div class="warn-card">
+    <h3>⚠ Post-Conversion Checklist</h3>
+    <ul>
+      <li>Verify pipe diameters — colors auto-mapped to NUMA scheme; name-based fallback applied where available</li>
+      <li>Check node elevations — load SRTM tiles above for automatic enrichment, or set manually in EPANET</li>
+      <li>Satellite backdrop — keep network_backdrop.bmp in the same folder as the .inp; in EPANET use View ▸ Backdrop ▸ Show if it doesn't appear</li>
+      <li>Add reservoirs, pumps, and valves as required — water towers from your KML are auto-detected as Tanks</li>
+      <li>Set node demands based on actual consumption data</li>
+      <li>Check network connectivity — isolated nodes cause solver errors</li>
+      <li>Run a trial simulation and review EPANET warnings</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+// ── NUMA color scheme ──────────────────────────────────────────
+const NUMA_SCHEME = [
+  { name: 'Orange',  kmlHex: 'ff00a5ff', diam: 75 },
+  { name: 'Magenta', kmlHex: 'ffff00ff', diam: 63 },
+  { name: 'Cyan',    kmlHex: 'ffffff00', diam: 50 },
+  { name: 'Yellow',  kmlHex: 'ff00ffff', diam: 40 },
+  { name: 'White',   kmlHex: 'ffffffff', diam: 32 },
+];
+
+function kmlColorDist(a, b) {
+  // Euclidean RGB distance between two AABBGGRR hex strings
+  const ri = h => parseInt(h.slice(6,8), 16);
+  const gi = h => parseInt(h.slice(4,6), 16);
+  const bi = h => parseInt(h.slice(2,4), 16);
+  return Math.sqrt((ri(a)-ri(b))**2 + (gi(a)-gi(b))**2 + (bi(a)-bi(b))**2);
+}
+
+function matchNUMAColor(kmlHex) {
+  // Returns the best-matching NUMA entry if within threshold, else null
+  let best = null, bestDist = Infinity;
+  for (const nc of NUMA_SCHEME) {
+    const d = kmlColorDist(kmlHex, nc.kmlHex);
+    if (d < bestDist) { bestDist = d; best = nc; }
+  }
+  return bestDist < 80 ? best : null;  // threshold = 80 in RGB space
+}
+
+// ─────────────────────────────────────────────
+//  State
+// ─────────────────────────────────────────────
+let network   = null; // { nodes: {id:{lon,lat,elevation}}, pipes:[{id,n1,n2,length,vertices}] }
+let lastKmlText = null; // cached KML text for re-parsing when parameters change
+let lastExport = null; // { inpText, inpName, bmpBlob, bmpName } — for the optional ZIP bundle
+const elevationCache = new Map(); // "lat,lon" → elevation (from API), survives re-parse
+const srtmTiles = new Map(); // "tileLat_tileLon" → { buffer, size, tileLat, tileLon, label }
+
+// ─────────────────────────────────────────────
+//  DOM refs
+// ─────────────────────────────────────────────
+const uploadZone = document.getElementById('uploadZone');
+const fileInput  = document.getElementById('fileInput');
+const statusMsg  = document.getElementById('statusMsg');
+const statsRow   = document.getElementById('statsRow');
+const convertBtn = document.getElementById('convertBtn');
+const resetBtn   = document.getElementById('resetBtn');
+const zipBtn     = document.getElementById('zipBtn');
+
+const srtmZone   = document.getElementById('srtmZone');
+const srtmInput  = document.getElementById('srtmInput');
+const tileList   = document.getElementById('tileList');
+const srtmStatus = document.getElementById('srtmStatus');
+const statElevBox = document.getElementById('statElevBox');
+const autoElevToggle = document.getElementById('autoElevToggle');
+const backdropToggle = document.getElementById('backdropToggle');
+
+// ─────────────────────────────────────────────
+//  UI helpers
+// ─────────────────────────────────────────────
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function showStatus(msg, type) {
+  const safe = escHtml(msg);
+  statusMsg.innerHTML = type === 'loading'
+    ? `<span class="spinner"></span><span>${safe}</span>`
+    : `<span>${safe}</span>`;
+  statusMsg.className = `status show ${type}`;
+}
+function hideStatus() { statusMsg.className = 'status'; }
+
+function showSrtmStatus(msg, type) {
+  srtmStatus.textContent = msg;
+  srtmStatus.className = `status show ${type}`;
+}
+function hideSrtmStatus() { srtmStatus.className = 'status hidden'; }
+
+function setStats(nodes, pipes, totalKm, elevCount, elevSource) {
+  document.getElementById('statNodes').textContent = nodes;
+  document.getElementById('statPipes').textContent = pipes;
+  document.getElementById('statLen').textContent   = totalKm.toFixed(1);
+  statsRow.classList.remove('hidden');
+
+  if (elevCount > 0) {
+    document.getElementById('statElev').textContent = elevCount;
+    document.getElementById('statElevLabel').textContent = elevSource || 'Elevations';
+    statElevBox.classList.remove('hidden');
+  } else {
+    statElevBox.classList.add('hidden');
+  }
+}
+
+// ─────────────────────────────────────────────
+//  KMZ upload interactions
+// ─────────────────────────────────────────────
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+resetBtn.addEventListener('click', () => {
+  network = null;
+  lastKmlText = null;
+  elevationCache.clear();
+  convertBtn.disabled = true;
+  statsRow.classList.add('hidden');
+  hideStatus();
+  fileInput.value = '';
+  document.getElementById('colorMapCard').classList.add('hidden');
+  document.getElementById('statTankBox').classList.add('hidden');
+  clearMapPreview();
+  lastExport = null;
+  zipBtn.classList.add('hidden');
+});
+
+convertBtn.addEventListener('click', generateINP);
+zipBtn.addEventListener('click', downloadZip);
+
+// FIX: Update roughness default + label when formula changes
+document.getElementById('pHeadloss').addEventListener('change', function () {
+  const ri = document.getElementById('pRoughness');
+  const rl = ri.closest('.param').querySelector('label');
+  if (this.value === 'H-W') { ri.value = 145;   ri.min = 1;     ri.max = 200; rl.textContent = 'Roughness (H-W C)'; ri.title = '145 (HDPE/Steel, Hazen-Williams)'; }
+  if (this.value === 'D-W') { ri.value = 0.1;   ri.min = 0.001; ri.max = 10;  rl.textContent = 'Roughness (mm)'; }
+  if (this.value === 'C-M') { ri.value = 0.013; ri.min = 0.001; ri.max = 0.1; rl.textContent = "Manning's n"; }
+});
+
+// FIX: Update demand label when flow units change
+const demandUnitLabels = { CMH: 'm³/hr', LPS: 'L/s', GPM: 'US gal/min', MGD: 'MGD' };
+document.getElementById('pUnits').addEventListener('change', function () {
+  document.getElementById('pDemand').closest('.param').querySelector('label').textContent
+    = `Node Demand (${demandUnitLabels[this.value]})`;
+});
+
+// ─────────────────────────────────────────────
+//  Collapsible card toggles
+// ─────────────────────────────────────────────
+document.getElementById('srtmCardToggle').addEventListener('click', () => {
+  document.getElementById('srtmCard').classList.toggle('collapsed');
+});
+
+document.getElementById('colorMapToggle').addEventListener('click', () => {
+  document.getElementById('colorMapCard').classList.toggle('collapsed');
+});
+
+document.getElementById('pTankPreset').addEventListener('change', function() {
+  const presets = {
+    '10000': { init: 7.0,  min: 5.3, max: 7.3, diam: 2.4 },
+    '8500':  { init: 6.6,  min: 5.3, max: 6.9, diam: 2.6 },
+    'custom': null
+  };
+  const p = presets[this.value];
+  if (p) {
+    document.getElementById('pTankInit').value = p.init;
+    document.getElementById('pTankMin').value  = p.min;
+    document.getElementById('pTankMax').value  = p.max;
+    document.getElementById('pTankDiam').value = p.diam;
+  }
+});
+
+// ─────────────────────────────────────────────
+//  SRTM upload interactions
+// ─────────────────────────────────────────────
+srtmZone.addEventListener('click', () => srtmInput.click());
+srtmZone.addEventListener('dragover', e => { e.preventDefault(); srtmZone.classList.add('drag-over'); });
+srtmZone.addEventListener('dragleave', () => srtmZone.classList.remove('drag-over'));
+srtmZone.addEventListener('drop', e => {
+  e.preventDefault();
+  srtmZone.classList.remove('drag-over');
+  if (e.dataTransfer.files.length) handleSRTMFiles(e.dataTransfer.files);
+});
+srtmInput.addEventListener('change', e => {
+  if (e.target.files.length) handleSRTMFiles(e.target.files);
+});
+
+async function handleSRTMFiles(files) {
+  let loaded = 0, failed = 0;
+  for (const file of files) {
+    try {
+      await loadSRTMTile(file);
+      loaded++;
+    } catch (e) {
+      failed++;
+      showSrtmStatus(`Error loading ${escHtml(file.name)}: ${escHtml(e.message)}`, 'error');
+    }
+  }
+
+  renderTileList();
+
+  if (loaded > 0) {
+    // If a network is already parsed, immediately enrich it
+    if (network) {
+      const count = enrichFromSRTM();
+      // Also fetch from API for remaining nodes
+      let apiCount = 0;
+      if (autoElevToggle.checked) {
+        apiCount = await fetchElevationsFromAPI();
+      }
+      const nodeCount = Object.keys(network.nodes).length;
+      const totalKm = network.pipes.reduce((s, p) => s + p.length, 0) / 1000;
+      const totalElev = count + apiCount;
+      const elevSource = apiCount > 0 ? `SRTM: ${count} + API: ${apiCount}` : 'SRTM Elevations';
+      setStats(nodeCount, network.pipes.length, totalKm, totalElev, elevSource);
+      showSrtmStatus(
+        `${srtmTiles.size} tile${srtmTiles.size > 1 ? 's' : ''} loaded · ${count} of ${nodeCount} junctions from SRTM` +
+        (apiCount > 0 ? ` · ${apiCount} from API` : ''),
+        'success'
+      );
+    } else {
+      showSrtmStatus(
+        `${srtmTiles.size} tile${srtmTiles.size > 1 ? 's' : ''} ready — load a KMZ to apply elevations`,
+        'success'
+      );
+    }
+  }
+
+  if (failed > 0 && loaded === 0) return; // error already shown
+  srtmInput.value = '';
+}
+
+async function loadSRTMTile(file) {
+  const name = file.name.toUpperCase().trim();
+
+  // Filename must encode SW corner: N51E000.hgt, S34W058.hgt etc.
+  const match = name.match(/^([NS])(\d{2})([EW])(\d{3})\.HGT$/);
+  if (!match) {
+    throw new Error('Filename must be in standard SRTM format, e.g. N51E000.hgt');
+  }
+
+  const tileLat = (match[1] === 'N' ? 1 : -1) * parseInt(match[2], 10);
+  const tileLon = (match[3] === 'E' ? 1 : -1) * parseInt(match[4], 10);
+
+  const buffer = await file.arrayBuffer();
+  const totalSamples = buffer.byteLength / 2; // 16-bit signed integers
+  const size = Math.round(Math.sqrt(totalSamples));
+
+  if (size !== 1201 && size !== 3601) {
+    throw new Error(`Unexpected grid size ${size}×${size} — expected 1201 (SRTM3/90m) or 3601 (SRTM1/30m)`);
+  }
+
+  const key = `${tileLat}_${tileLon}`;
+  srtmTiles.set(key, { buffer, size, tileLat, tileLon, filename: file.name });
+}
+
+function removeTile(key) {
+  srtmTiles.delete(key);
+  renderTileList();
+  if (srtmTiles.size === 0) hideSrtmStatus();
+  // Re-enrich with remaining tiles (or clear SRTM elevations if none left)
+  if (network) {
+    // Reset all node elevations to 0 then re-enrich from scratch
+    const defaultElev = 0;
+    for (const n of Object.values(network.nodes)) n.elevation = defaultElev;
+    const count = enrichFromSRTM();
+    const nodeCount = Object.keys(network.nodes).length;
+    const totalKm = network.pipes.reduce((s, p) => s + p.length, 0) / 1000;
+    setStats(nodeCount, network.pipes.length, totalKm, count, 'SRTM Elevations');
+    if (srtmTiles.size > 0) {
+      showSrtmStatus(`${srtmTiles.size} tile${srtmTiles.size > 1 ? 's' : ''} loaded · ${count} of ${nodeCount} junctions enriched`, 'success');
+    }
+  }
+}
+
+function renderTileList() {
+  if (srtmTiles.size === 0) {
+    tileList.classList.add('hidden');
+    tileList.innerHTML = '';
+    return;
+  }
+  tileList.classList.remove('hidden');
+  tileList.innerHTML = '';
+  for (const [key, tile] of srtmTiles) {
+    const res = tile.size === 3601 ? '30m' : '90m';
+    const tag = document.createElement('div');
+    tag.className = 'tile-tag';
+    tag.innerHTML = `
+      ${escHtml(tile.filename)}
+      <span class="tile-res">${res}</span>
+      <button class="tile-remove" title="Remove tile">✕</button>
+    `;
+    tag.querySelector('.tile-remove').addEventListener('click', () => removeTile(key));
+    tileList.appendChild(tag);
+  }
+}
+
+// ─────────────────────────────────────────────
+//  SRTM elevation lookup (bilinear interpolation)
+// ─────────────────────────────────────────────
+function getSRTMElevation(lat, lon) {
+  const tileLat = Math.floor(lat);
+  const tileLon = Math.floor(lon);
+  const tile = srtmTiles.get(`${tileLat}_${tileLon}`);
+  if (!tile) return null;
+
+  const { buffer, size, tileLat: tLat, tileLon: tLon } = tile;
+  const N = size;
+  const view = new DataView(buffer);
+
+  // Sample a single grid cell; clamp to bounds; return null for voids (-32768)
+  function sample(r, c) {
+    r = Math.max(0, Math.min(N - 1, Math.round(r)));
+    c = Math.max(0, Math.min(N - 1, Math.round(c)));
+    const v = view.getInt16((r * N + c) * 2, false); // big-endian
+    return v === -32768 ? null : v;
+  }
+
+  // Fractional row/col within tile
+  // Row 0 = north edge (tLat + 1°), increases southward
+  const fracRow = (tLat + 1 - lat) * (N - 1);
+  const fracCol = (lon - tLon)      * (N - 1);
+  const r0 = Math.floor(fracRow), r1 = r0 + 1;
+  const c0 = Math.floor(fracCol), c1 = c0 + 1;
+  const dr = fracRow - r0, dc = fracCol - c0;
+
+  const v00 = sample(r0, c0), v01 = sample(r0, c1);
+  const v10 = sample(r1, c0), v11 = sample(r1, c1);
+
+  const valid = [v00, v01, v10, v11].filter(v => v !== null);
+  if (valid.length === 0) return null;
+
+  // Fall back to average of available samples if any are void
+  if (valid.length < 4) return valid.reduce((a, b) => a + b, 0) / valid.length;
+
+  // Bilinear interpolation
+  return v00 * (1 - dr) * (1 - dc)
+       + v01 * (1 - dr) * dc
+       + v10 * dr       * (1 - dc)
+       + v11 * dr       * dc;
+}
+
+// ─────────────────────────────────────────────
+//  SRTM elevation enrichment
+// ─────────────────────────────────────────────
+function enrichFromSRTM() {
+  if (!network || srtmTiles.size === 0) return 0;
+  const defaultElev = 0;
+  let count = 0;
+  for (const n of Object.values(network.nodes)) {
+    // Only overwrite nodes that still have no real elevation
+    if (n.elevation !== 0 && n.elevation !== defaultElev) continue;
+    const elev = getSRTMElevation(n.lat, n.lon);
+    if (elev !== null) {
+      n.elevation = Math.round(elev * 100) / 100;
+      count++;
+    }
+  }
+  return count;
+}
+
+// ─────────────────────────────────────────────
+//  Google Elevation — Maps JavaScript API
+//  Uses google.maps.ElevationService (browser-safe, no CORS issues)
+// ─────────────────────────────────────────────
+const GOOGLE_ELEVATION_API_KEY = 'PASTE_YOUR_GOOGLE_API_KEY_HERE';
+
+let _mapsApiPromise = null;
+let _gmAuthFailureReason = null;
+
+// Google calls this global on any auth failure (bad key, API not enabled,
+// referer blocked, billing off, expired key). It's the only programmatic
+// signal — otherwise errors only appear in the devtools console.
+window.gm_authFailure = function () {
+  _gmAuthFailureReason = 'Google Maps auth failure. Likely causes: (1) "Maps JavaScript API" not enabled on the key, (2) billing disabled on the Cloud project, (3) HTTP-referrer restriction blocks this origin, or (4) key expired/invalid. Open DevTools console for the exact error code.';
+};
+
+function loadGoogleMapsAPI() {
+  if (_mapsApiPromise) return _mapsApiPromise;
+  _mapsApiPromise = new Promise((resolve, reject) => {
+    if (window.google && window.google.maps && window.google.maps.ElevationService) {
+      resolve(); return;
+    }
+
+    // Warn early when running from file:// — referer is "null" and keys with
+    // HTTP-referrer restrictions will fail. Does not block, just informs.
+    if (location.protocol === 'file:') {
+      console.warn('HydroForge: running from file:// — if your Google API key has HTTP-referrer restrictions, requests will be denied. Serve over http(s) or allow file origins on the key.');
+    }
+
+    let settled = false;
+    const settle = (fn, arg) => { if (!settled) { settled = true; fn(arg); } };
+
+    // Named global callback signals full API readiness.
+    window.__hydroforgeGMapsReady = () => settle(resolve);
+
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_ELEVATION_API_KEY}&loading=async&callback=__hydroforgeGMapsReady`;
+    script.async = true;
+    script.onerror = () => settle(reject, new Error('Failed to load Google Maps JS script (network error, CSP, or ad blocker).'));
+    document.head.appendChild(script);
+
+    // Poll for auth failure — gm_authFailure fires *after* the script loads.
+    const authPoll = setInterval(() => {
+      if (_gmAuthFailureReason) {
+        clearInterval(authPoll);
+        settle(reject, new Error(_gmAuthFailureReason));
+      } else if (settled) {
+        clearInterval(authPoll);
+      }
+    }, 300);
+
+    // Fallback timeout: if neither callback nor auth failure fires, the
+    // script likely never executed (blocked, offline, or silent key error).
+    setTimeout(() => {
+      clearInterval(authPoll);
+      settle(reject, new Error(
+        _gmAuthFailureReason ||
+        'Google Maps API did not initialize within 15s. Check DevTools console for the specific error, then verify "Maps JavaScript API" is enabled and billing is active on your Cloud project.'
+      ));
+    }, 15000);
+  });
+
+  // Clear the cached promise on failure so the next attempt can retry
+  // (e.g., after the user enables the API in Cloud Console).
+  _mapsApiPromise.catch(() => {
+    _mapsApiPromise = null;
+    _gmAuthFailureReason = null;
+  });
+
+  return _mapsApiPromise;
+}
+
+let lastElevError = null; // last elevation-fetch failure — surfaced in final status
+
+async function fetchElevationsFromAPI() {
+  lastElevError = null;
+  if (!network) return 0;
+
+  // Collect nodes that still need elevation
+  const needElev = [];
+  for (const [id, n] of Object.entries(network.nodes)) {
+    if (n.elevation === 0) needElev.push({ id, lat: n.lat, lon: n.lon });
+  }
+
+  if (needElev.length === 0) return 0;
+
+  showStatus(`Fetching elevation data for ${needElev.length} junctions...`, 'loading');
+
+  let totalFetched = 0;
+  const BATCH_SIZE = 512; // ElevationService supports up to 512 per call
+
+  try {
+    await loadGoogleMapsAPI();
+    // With loading=async, the elevation library must be imported explicitly.
+    // Instantiating ElevationService before this returns will hang silently.
+    const { ElevationService } = await google.maps.importLibrary('elevation');
+    const elevator = new ElevationService();
+
+    for (let i = 0; i < needElev.length; i += BATCH_SIZE) {
+      const batch = needElev.slice(i, i + BATCH_SIZE);
+
+      // Callback wrapped in a Promise with a hard timeout so a silent
+      // network/auth failure can't leave the UI stuck on "Fetching…".
+      // Also polls gm_authFailure — Google fires that global on billing /
+      // referer / API-not-enabled errors *during the request*, and it's
+      // the only programmatic hook when the callback never fires.
+      const results = await new Promise((resolve, reject) => {
+        const authWatch = setInterval(() => {
+          if (_gmAuthFailureReason) {
+            clearInterval(authWatch);
+            clearTimeout(t);
+            reject(new Error(_gmAuthFailureReason));
+          }
+        }, 250);
+        const t = setTimeout(() => {
+          clearInterval(authWatch);
+          reject(new Error(
+            _gmAuthFailureReason ||
+            'ElevationService request timed out after 20s with no response. Most common cause: billing is not enabled on the Cloud project (requests are silently dropped). Open DevTools (F12) → Console — Google prints the specific error (BillingNotEnabledMapError / ApiNotActivatedMapError / RefererNotAllowedMapError) there.'
+          ));
+        }, 20000);
+        elevator.getElevationForLocations(
+          { locations: batch.map(n => ({ lat: n.lat, lng: n.lon })) },
+          (res, status) => {
+            clearInterval(authWatch);
+            clearTimeout(t);
+            if (status === 'OK') resolve(res);
+            else reject(new Error(`ElevationService returned: ${status} — open DevTools Console for Google's detailed error message.`));
+          }
+        );
+      });
+
+      for (let j = 0; j < batch.length; j++) {
+        const elev = results[j]?.elevation;
+        if (elev !== null && elev !== undefined && !isNaN(elev)) {
+          network.nodes[batch[j].id].elevation = Math.round(elev * 100) / 100;
+          totalFetched++;
+        }
+      }
+
+      // Show progress for large networks
+      if (needElev.length > BATCH_SIZE) {
+        const progress = Math.min(i + BATCH_SIZE, needElev.length);
+        showStatus(`Fetching elevation data... ${progress}/${needElev.length} junctions`, 'loading');
+      }
+    }
+  } catch (err) {
+    console.warn('Google Elevation fetch failed:', err);
+    lastElevError = err.message || String(err);
+    showStatus(`Warning: Elevation fetch failed — ${lastElevError}`, 'warn');
+  }
+
+  return totalFetched;
+}
+
+// ─────────────────────────────────────────────
+//  Satellite map preview (Maps JavaScript API)
+// ─────────────────────────────────────────────
+const TANK_COLOR = '#ffb74d';
+const PIPE_FALLBACK_COLOR = '#26c6da';
+let previewMap = null;
+let previewInfoWindow = null;
+let previewOverlays = [];
+
+function kmlToCssColor(kmlHex) {
+  // AABBGGRR → #RRGGBB
+  return '#' + kmlHex.slice(6, 8) + kmlHex.slice(4, 6) + kmlHex.slice(2, 4);
+}
+
+function resolvePipeDiameter(p) {
+  // Same priority order as the INP exporter: color map → pipe name → default
+  if (p.color) {
+    for (const inp of document.querySelectorAll('#colorMapTable .color-diam-input')) {
+      if (inp.dataset.hex === p.color) {
+        const d = parseFloat(inp.value);
+        if (!isNaN(d) && d > 0) return d;
+      }
+    }
+  }
+  if (p.nameDiam != null) return p.nameDiam;
+  return parseFloat(document.getElementById('pDiameter').value) || 0;
+}
+
+function clearMapPreview() {
+  for (const o of previewOverlays) o.setMap(null);
+  previewOverlays = [];
+  document.getElementById('previewCard').classList.add('hidden');
+}
+
+async function renderMapPreview() {
+  if (!network) return;
+  try {
+    await loadGoogleMapsAPI();
+    const { Map, InfoWindow } = await google.maps.importLibrary('maps');
+    // Legacy Marker lives in the marker library under async loading
+    let MarkerCtor = google.maps.Marker;
+    try {
+      const markerLib = await google.maps.importLibrary('marker');
+      if (markerLib.Marker) MarkerCtor = markerLib.Marker;
+    } catch (e) { /* core Marker fallback is fine */ }
+
+    document.getElementById('previewCard').classList.remove('hidden');
+
+    if (!previewMap) {
+      previewMap = new Map(document.getElementById('mapPreview'), {
+        mapTypeId: 'hybrid',
+        tilt: 0,
+        streetViewControl: false,
+        mapTypeControlOptions: { mapTypeIds: ['hybrid', 'satellite', 'roadmap', 'terrain'] },
+      });
+      previewInfoWindow = new InfoWindow();
+    } else {
+      // Card may have been hidden (Reset) — force tile refresh
+      google.maps.event.trigger(previewMap, 'resize');
+    }
+
+    for (const o of previewOverlays) o.setMap(null);
+    previewOverlays = [];
+
+    const bounds = new google.maps.LatLngBounds();
+
+    for (const p of network.pipes) {
+      const n1 = network.nodes[p.n1], n2 = network.nodes[p.n2];
+      if (!n1 || !n2) continue;
+      const path = [
+        { lat: n1.lat, lng: n1.lon },
+        ...(p.vertices || []).map(v => ({ lat: v.lat, lng: v.lon })),
+        { lat: n2.lat, lng: n2.lon },
+      ];
+      const line = new google.maps.Polyline({
+        path, map: previewMap,
+        strokeColor: p.color ? kmlToCssColor(p.color) : PIPE_FALLBACK_COLOR,
+        strokeOpacity: 0.95, strokeWeight: 4,
+      });
+      line.addListener('click', e => {
+        const numa = p.color ? matchNUMAColor(p.color) : null;
+        previewInfoWindow.setContent(
+          `<div style="color:#222;font:13px/1.5 sans-serif">` +
+          `<strong>${escHtml(p.id)}</strong><br>` +
+          `Length: ${p.length.toFixed(1)} m<br>` +
+          `Diameter: ${resolvePipeDiameter(p)} mm${numa ? ` (${escHtml(numa.name)})` : ''}<br>` +
+          `${escHtml(p.n1)} → ${escHtml(p.n2)}</div>`
+        );
+        previewInfoWindow.setPosition(e.latLng);
+        previewInfoWindow.open(previewMap);
+      });
+      previewOverlays.push(line);
+      for (const pt of path) bounds.extend(pt);
+    }
+
+    const tankSet = new Set(network.tanks || []);
+    for (const [id, n] of Object.entries(network.nodes)) {
+      const isTank = tankSet.has(id);
+      const marker = new MarkerCtor({
+        position: { lat: n.lat, lng: n.lon },
+        map: previewMap,
+        title: id,
+        zIndex: isTank ? 20 : 10,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: isTank ? 8 : 4,
+          fillColor: isTank ? TANK_COLOR : '#ffffff',
+          fillOpacity: 0.95,
+          strokeColor: '#1a1a1a',
+          strokeWeight: 1.5,
+        },
+      });
+      marker.addListener('click', () => {
+        const elevTxt = (n.elevation && n.elevation !== 0) ? `${n.elevation.toFixed(2)} m` : 'not set';
+        previewInfoWindow.setContent(
+          `<div style="color:#222;font:13px/1.5 sans-serif">` +
+          `<strong>${escHtml(id)}</strong> — ${isTank ? 'Tank' : 'Junction'}${n.name ? ` (${escHtml(n.name)})` : ''}<br>` +
+          `Elevation: ${elevTxt}<br>` +
+          `${n.lat.toFixed(6)}, ${n.lon.toFixed(6)}</div>`
+        );
+        previewInfoWindow.open(previewMap, marker);
+      });
+      previewOverlays.push(marker);
+      bounds.extend({ lat: n.lat, lng: n.lon });
+    }
+
+    if (!bounds.isEmpty()) previewMap.fitBounds(bounds, 40);
+    buildMapLegend();
+  } catch (err) {
+    // Preview is best-effort QA — never let it break the parse flow
+    console.warn('Satellite preview failed:', err);
+    document.getElementById('previewCard').classList.add('hidden');
+  }
+}
+
+function buildMapLegend() {
+  const legend = document.getElementById('mapLegend');
+  let html =
+    `<span class="legend-item"><span class="legend-dot" style="background:#ffffff"></span>Junction</span>` +
+    `<span class="legend-item"><span class="legend-dot" style="background:${TANK_COLOR}"></span>Tank</span>`;
+  const colors = network.colorSet || new Set();
+  for (const hex of colors) {
+    const numa = matchNUMAColor(hex);
+    const css = kmlToCssColor(hex);
+    html += `<span class="legend-item"><span class="legend-line" style="background:${css}"></span>${numa ? `${escHtml(numa.name)} ${numa.diam}mm` : css}</span>`;
+  }
+  if (colors.size === 0) {
+    html += `<span class="legend-item"><span class="legend-line" style="background:${PIPE_FALLBACK_COLOR}"></span>Pipe</span>`;
+  }
+  legend.innerHTML = html;
+}
+
+// ─────────────────────────────────────────────
+//  Satellite BMP backdrop (Maps Static API)
+//  Stitches satellite tiles over the network bbox, resamples
+//  Web Mercator rows → uniform-latitude rows (EPANET stretches the
+//  backdrop linearly across [BACKDROP] DIMENSIONS), and encodes
+//  24-bit BMP — the only raster format the EPANET GUI accepts.
+// ─────────────────────────────────────────────
+function lonToMercX(lon, z) { return (lon + 180) / 360 * 256 * Math.pow(2, z); }
+function latToMercY(lat, z) {
+  const s = Math.sin(lat * Math.PI / 180);
+  return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * 256 * Math.pow(2, z);
+}
+function mercXToLon(x, z) { return x / (256 * Math.pow(2, z)) * 360 - 180; }
+function mercYToLat(y, z) {
+  const n = Math.PI - 2 * Math.PI * y / (256 * Math.pow(2, z));
+  return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+}
+
+function loadStaticTile(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    // <img> loads have no native timeout — without this a stalled request
+    // hangs the export indefinitely (unlike the elevation path's 20s guard).
+    const t = setTimeout(() => {
+      img.src = ''; // abort the in-flight load
+      reject(new Error('Maps Static API tile timed out after 20s — check your connection and that "Maps Static API" is enabled on the key.'));
+    }, 20000);
+    img.onload = () => { clearTimeout(t); resolve(img); };
+    img.onerror = () => { clearTimeout(t); reject(new Error(
+      'Maps Static API request failed — in Cloud Console, add "Maps Static API" to your key\'s API restrictions (same place you enabled the other two).'
+    )); };
+    img.src = url;
+  });
+}
+
+function imageDataToBMP(imgData) {
+  const { width: w, height: h, data } = imgData;
+  const rowSize = Math.floor((24 * w + 31) / 32) * 4; // rows padded to 4 bytes
+  const fileSize = 54 + rowSize * h;
+  const buf = new ArrayBuffer(fileSize);
+  const dv = new DataView(buf);
+  dv.setUint8(0, 0x42); dv.setUint8(1, 0x4D);    // 'BM'
+  dv.setUint32(2, fileSize, true);
+  dv.setUint32(10, 54, true);                    // pixel data offset
+  dv.setUint32(14, 40, true);                    // BITMAPINFOHEADER size
+  dv.setInt32(18, w, true);
+  dv.setInt32(22, h, true);                      // positive height = bottom-up rows
+  dv.setUint16(26, 1, true);                     // color planes
+  dv.setUint16(28, 24, true);                    // bits per pixel
+  dv.setUint32(34, rowSize * h, true);
+  dv.setInt32(38, 2835, true); dv.setInt32(42, 2835, true); // 72 dpi
+  const bytes = new Uint8Array(buf);
+  for (let y = 0; y < h; y++) {
+    const src = (h - 1 - y) * w * 4;
+    let off = 54 + y * rowSize;
+    for (let x = 0; x < w; x++) {
+      const s = src + x * 4;
+      bytes[off++] = data[s + 2]; // B
+      bytes[off++] = data[s + 1]; // G
+      bytes[off++] = data[s];     // R
+    }
+  }
+  return new Blob([buf], { type: 'image/bmp' });
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Defer revoke — revoking synchronously can cancel the download of a large
+  // (~20 MB) BMP before the browser finishes reading the blob.
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+async function generateSatelliteBackdrop(minLon, minLat, maxLon, maxLat) {
+  // The Mercator math and EPANET's linear bbox stretch both assume a normal,
+  // non-wrapping extent. A network crossing the 180° meridian would request a
+  // whole-globe image and stretch it nonsensically — bail with a clear message.
+  if (maxLon - minLon > 180) {
+    throw new Error('network crosses the antimeridian (180°) — satellite backdrop not supported for this extent.');
+  }
+
+  const SCALE = 2;             // Static API scale=2 doubles returned pixels
+  const REQ_MAX = 640;         // max size param per request
+  const CHUNK = REQ_MAX * SCALE;
+  const MAX_PX = 2560;         // cap final image side → BMP stays under ~20 MB
+
+  const widthAt  = z => (lonToMercX(maxLon, z) - lonToMercX(minLon, z)) * SCALE;
+  const heightAt = z => (latToMercY(minLat, z) - latToMercY(maxLat, z)) * SCALE;
+  let zoom = 18; // satellite coverage gets spotty above 18 in rural areas
+  while (zoom > 1 && (widthAt(zoom) > MAX_PX || heightAt(zoom) > MAX_PX)) zoom--;
+
+  const originX = lonToMercX(minLon, zoom) * SCALE;
+  const originY = latToMercY(maxLat, zoom) * SCALE;
+  const W = Math.max(64, Math.round(widthAt(zoom)));
+  const H = Math.max(64, Math.round(heightAt(zoom)));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  // Opaque context + fill: any pixel a tile doesn't cover (rounding seams,
+  // short edge tiles) would otherwise be transparent-black and bake into the
+  // 24-bit BMP as black. A defined fill keeps seams from showing as artifacts.
+  const ctx = canvas.getContext('2d', { alpha: false });
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, W, H);
+
+  const cols = Math.ceil(W / CHUNK), rows = Math.ceil(H / CHUNK);
+  let done = 0;
+  for (let i = 0; i < cols; i++) {
+    for (let j = 0; j < rows; j++) {
+      const x0 = i * CHUNK, y0 = j * CHUNK;
+      const sw = Math.min(CHUNK, W - x0), sh = Math.min(CHUNK, H - y0);
+      const reqW = Math.min(REQ_MAX, Math.ceil(sw / SCALE));
+      const reqH = Math.min(REQ_MAX, Math.ceil(sh / SCALE));
+      const cLon = mercXToLon((originX + x0 + sw / 2) / SCALE, zoom);
+      const cLat = mercYToLat((originY + y0 + sh / 2) / SCALE, zoom);
+      showStatus(`Building satellite backdrop… tile ${++done}/${cols * rows}`, 'loading');
+      const img = await loadStaticTile(
+        `https://maps.googleapis.com/maps/api/staticmap?center=${cLat.toFixed(8)},${cLon.toFixed(8)}` +
+        `&zoom=${zoom}&size=${reqW}x${reqH}&scale=${SCALE}&maptype=satellite&key=${GOOGLE_ELEVATION_API_KEY}`
+      );
+      // Tile is centered on the chunk center; place it on the shared Mercator pixel grid
+      ctx.drawImage(img, Math.round(x0 + sw / 2 - img.width / 2), Math.round(y0 + sh / 2 - img.height / 2));
+    }
+  }
+
+  // Vertical resample: Mercator rows → uniform-latitude rows
+  let srcData;
+  try {
+    srcData = ctx.getImageData(0, 0, W, H);
+  } catch (e) {
+    throw new Error('Browser blocked reading the satellite image (CORS) — serve HydroForge over http(s) instead of file://');
+  }
+  const out = ctx.createImageData(W, H);
+  for (let row = 0; row < H; row++) {
+    const lat = maxLat + (row + 0.5) / H * (minLat - maxLat);
+    let sy = Math.round(latToMercY(lat, zoom) * SCALE - originY - 0.5);
+    sy = Math.max(0, Math.min(H - 1, sy));
+    out.data.set(srcData.data.subarray(sy * W * 4, (sy + 1) * W * 4), row * W * 4);
+  }
+
+  // Return the blob so the caller decides how to deliver it (separate file
+  // and/or zipped) — keeps a single source of truth for the generated image.
+  return { blob: imageDataToBMP(out), filename: 'network_backdrop.bmp' };
+}
+
+// Bundle the most recent export into a single network.zip (optional convenience
+// so the .inp and its backdrop can't get separated when moved/emailed). Uses the
+// already-loaded JSZip — no re-fetch of the satellite image.
+async function downloadZip() {
+  if (!lastExport) return;
+  try {
+    showStatus('Bundling network.zip…', 'loading');
+    const zip = new JSZip();
+    zip.file(lastExport.inpName, lastExport.inpText);
+    if (lastExport.bmpBlob) zip.file(lastExport.bmpName, lastExport.bmpBlob);
+    const blob = await zip.generateAsync({ type: 'blob' });
+    downloadBlob(blob, 'network.zip');
+    showStatus('✓ network.zip downloaded — contains the .inp + backdrop. Unzip both into one folder, then open the .inp in EPANET.', 'success');
+  } catch (e) {
+    showStatus('ZIP bundling failed: ' + (e.message || e), 'error');
+  }
+}
+
+// ─────────────────────────────────────────────
+//  File handling (async with API enrichment)
+// ─────────────────────────────────────────────
+async function handleFile(file) {
+  const name = file.name.toLowerCase();
+  if (!name.endsWith('.kml') && !name.endsWith('.kmz')) {
+    showStatus('Please select a .kml or .kmz file.', 'error');
+    return;
+  }
+
+  showStatus('Reading file…', 'loading');
+  convertBtn.disabled = true;
+  statsRow.classList.add('hidden');
+  network = null;
+
+  try {
+    let kmlText;
+    if (name.endsWith('.kmz')) {
+      kmlText = await extractKMLFromKMZ(file);
+    } else {
+      kmlText = await file.text();
+    }
+
+    lastKmlText = kmlText; // save for re-parsing when parameters change
+    network = parseKML(kmlText);
+
+    const nodeCount = Object.keys(network.nodes).length;
+    const pipeCount = network.pipes.length;
+
+    if (nodeCount === 0 && pipeCount === 0) {
+      throw new Error('No LineStrings or Points found in the KML. Make sure your file contains polylines or point placemarks.');
+    }
+
+    // Enrich from SRTM if tiles are already loaded
+    let srtmCount = enrichFromSRTM();
+
+    // Fetch from Google Elevation API for remaining nodes
+    let apiCount = 0;
+    if (autoElevToggle.checked) {
+      apiCount = await fetchElevationsFromAPI();
+    }
+
+    // Cache all elevation data so re-parses don't need API calls
+    for (const [id, n] of Object.entries(network.nodes)) {
+      if (n.elevation !== 0) {
+        elevationCache.set(`${n.lat.toFixed(6)},${n.lon.toFixed(6)}`, n.elevation);
+      }
+    }
+
+    const totalElevCount = srtmCount + apiCount;
+    const totalKm = network.pipes.reduce((s, p) => s + p.length, 0) / 1000;
+
+    let elevSource = 'Elevations';
+    if (srtmCount > 0 && apiCount > 0) {
+      elevSource = `SRTM: ${srtmCount} + API: ${apiCount}`;
+    } else if (srtmCount > 0) {
+      elevSource = 'SRTM Elevations';
+    } else if (apiCount > 0) {
+      elevSource = 'API Elevations';
+    }
+    const tankNodes = network.tanks || [];
+    const junctionNodes = nodeCount - tankNodes.length;
+    setStats(junctionNodes, pipeCount, totalKm, totalElevCount, elevSource);
+
+    // Show/hide tank stat box
+    const statTankBox = document.getElementById('statTankBox');
+    if (tankNodes.length > 0) {
+      document.getElementById('statTanks').textContent = tankNodes.length;
+      statTankBox.classList.remove('hidden');
+    } else {
+      statTankBox.classList.add('hidden');
+    }
+
+    // Populate color map card
+    const colorSet = network.colorSet || new Set();
+    const colorMapCard = document.getElementById('colorMapCard');
+    const colorMapTable = document.getElementById('colorMapTable');
+    if (colorSet.size > 0) {
+      colorMapCard.classList.remove('hidden');
+      colorMapCard.classList.remove('collapsed'); // expand on first upload
+      colorMapTable.innerHTML = '';
+      // Count pipes per color
+      const colorCount = new Map();
+      for (const p of network.pipes) {
+        if (p.color) colorCount.set(p.color, (colorCount.get(p.color) || 0) + 1);
+      }
+      for (const hex of colorSet) {
+        // Convert AABBGGRR → #RRGGBB
+        const css = '#' + hex.slice(6, 8) + hex.slice(4, 6) + hex.slice(2, 4);
+        const count = colorCount.get(hex) || 0;
+        const defaultDiam = document.getElementById('pDiameter').value;
+        const numaMatch = matchNUMAColor(hex);
+        const autoFilled = numaMatch !== null;
+        const rowDiam = autoFilled ? numaMatch.diam : defaultDiam;
+        const numaHint = autoFilled ? `<span style="font-size:0.75rem;color:var(--accent);margin-left:0.3rem">→ ${numaMatch.name} ${numaMatch.diam}mm</span>` : '';
+        const row = document.createElement('div');
+        row.className = 'color-row';
+        row.innerHTML = `
+          <span class="color-swatch" style="background:${css}"></span>
+          <span class="color-label">${css} &nbsp;<span style="opacity:0.5">(${count} pipe${count !== 1 ? 's' : ''})</span>${numaHint}</span>
+          <input type="number" class="color-diam-input" data-hex="${hex}"
+                 value="${rowDiam}" min="1" max="5000"
+                 title="Diameter (mm) for pipes with this color" />
+          <span style="font-size:0.8rem;color:var(--muted)">mm</span>
+        `;
+        colorMapTable.appendChild(row);
+      }
+    } else {
+      colorMapCard.classList.add('hidden');
+    }
+
+    let msg = `✓ Parsed — ${junctionNodes} junctions, ${pipeCount} pipes, ${totalKm.toFixed(1)} km total`;
+    if (tankNodes.length > 0) msg += ` · ${tankNodes.length} tank${tankNodes.length > 1 ? 's' : ''} auto-detected`;
+    if (srtmCount > 0) {
+      msg += ` · ${srtmCount} elevations from SRTM`;
+    }
+    if (apiCount > 0) {
+      msg += ` · ${apiCount} elevations from API`;
+    }
+    if (totalElevCount === 0) {
+      if (lastElevError) {
+        msg += ` · elevation API failed: ${lastElevError}`;
+      } else if (srtmTiles.size > 0) {
+        msg += ` · no SRTM coverage for this area`;
+      } else if (!autoElevToggle.checked) {
+        msg += ` · load SRTM tiles or enable API to enrich elevations`;
+      } else {
+        msg += ` · load SRTM tiles to enrich elevations`;
+      }
+    }
+
+    const elevApiFailed = autoElevToggle.checked && apiCount === 0 && !!lastElevError;
+    const msgType = (elevApiFailed || (srtmTiles.size > 0 && srtmCount === 0 && apiCount === 0)) ? 'warn' : 'success';
+    showStatus(msg, msgType);
+    convertBtn.disabled = false;
+
+    renderMapPreview(); // fire-and-forget; has its own error handling
+
+  } catch (err) {
+    showStatus(`Error: ${err.message}`, 'error');
+    console.error(err);
+  }
+}
+
+// ─────────────────────────────────────────────
+//  KMZ extraction
+// ─────────────────────────────────────────────
+async function extractKMLFromKMZ(file) {
+  let zip;
+  try {
+    zip = await JSZip.loadAsync(file);
+  } catch (e) {
+    throw new Error('Could not open KMZ file — is it a valid ZIP/KMZ archive?');
+  }
+
+  const kmlFiles = Object.keys(zip.files).filter(n => n.toLowerCase().endsWith('.kml'));
+  if (kmlFiles.length === 0) throw new Error('No .kml file found inside the KMZ archive.');
+
+  const preferred = kmlFiles.find(n => n.toLowerCase() === 'doc.kml') || kmlFiles[0];
+  return await zip.files[preferred].async('string');
+}
+
+// ─────────────────────────────────────────────
+//  Geometry utility functions
+// ─────────────────────────────────────────────
+function dist(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const f1 = lat1 * Math.PI / 180, f2 = lat2 * Math.PI / 180;
+  const df = (lat2 - lat1) * Math.PI / 180, dl = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(df/2)**2 + Math.cos(f1)*Math.cos(f2)*Math.sin(dl/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// Point-to-segment nearest point (in lon/lat plane, returns { lon, lat, t })
+// t is the parameter along the segment [0,1]
+function nearestPointOnSegment(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq < 1e-20) return { lon: ax, lat: ay, t: 0 };
+  let t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  return { lon: ax + t * dx, lat: ay + t * dy, t };
+}
+
+// 2D line segment intersection (returns { lon, lat, t1, t2 } or null)
+// t1 = parameter on seg1, t2 = parameter on seg2
+function segmentIntersection(a1x, a1y, a2x, a2y, b1x, b1y, b2x, b2y) {
+  const d1x = a2x - a1x, d1y = a2y - a1y;
+  const d2x = b2x - b1x, d2y = b2y - b1y;
+  const cross = d1x * d2y - d1y * d2x;
+  if (Math.abs(cross) < 1e-18) return null; // parallel or coincident
+
+  const dx = b1x - a1x, dy = b1y - a1y;
+  const t1 = (dx * d2y - dy * d2x) / cross;
+  const t2 = (dx * d1y - dy * d1x) / cross;
+
+  // Strictly interior intersections (exclude endpoints to avoid duplicates)
+  if (t1 > 0.001 && t1 < 0.999 && t2 > 0.001 && t2 < 0.999) {
+    return {
+      lon: a1x + t1 * d1x,
+      lat: a1y + t1 * d1y,
+      t1, t2
+    };
+  }
+  return null;
+}
+
+// Approximate degree-tolerance from meters at a given latitude
+function metersToDegrees(meters, lat) {
+  const latDeg = meters / 111320;
+  const lonDeg = meters / (111320 * Math.cos(lat * Math.PI / 180));
+  return Math.max(latDeg, lonDeg);
+}
+
+// ─────────────────────────────────────────────
+//  KML style resolution helpers
+// ─────────────────────────────────────────────
+
+/**
+ * Resolves the effective <Style> element for a Placemark.
+ * Handles inline styles, styleUrl references, and StyleMap normal pairs.
+ * Uses getElementsByTagName throughout to avoid XML namespace issues.
+ */
+function resolveStyleForPlacemark(pm, doc) {
+  // 1. Check for inline <Style> child of the Placemark
+  const children = pm.childNodes;
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+    if (child.tagName === 'Style') return child;
+  }
+
+  // 2. Check for a <styleUrl>
+  const styleUrlEls = pm.getElementsByTagName('styleUrl');
+  if (styleUrlEls.length === 0) return null;
+  const styleUrl = styleUrlEls[0].textContent.trim();
+  const refId = styleUrl.startsWith('#') ? styleUrl.slice(1) : styleUrl;
+
+  // 3. Search doc for <Style id="refId"> or <StyleMap id="refId">
+  // Look through all Style elements
+  for (const styleEl of doc.getElementsByTagName('Style')) {
+    if (styleEl.getAttribute('id') === refId) return styleEl;
+  }
+
+  // 4. Look through StyleMap elements
+  for (const sm of doc.getElementsByTagName('StyleMap')) {
+    if (sm.getAttribute('id') !== refId) continue;
+    // Find the <Pair> with <key>normal</key>
+    for (const pair of sm.getElementsByTagName('Pair')) {
+      const keyEls = pair.getElementsByTagName('key');
+      if (keyEls.length === 0) continue;
+      if (keyEls[0].textContent.trim() !== 'normal') continue;
+      // Resolve the pair's styleUrl
+      const pairStyleUrlEls = pair.getElementsByTagName('styleUrl');
+      if (pairStyleUrlEls.length === 0) continue;
+      const pairRef = pairStyleUrlEls[0].textContent.trim();
+      const pairId = pairRef.startsWith('#') ? pairRef.slice(1) : pairRef;
+      for (const styleEl of doc.getElementsByTagName('Style')) {
+        if (styleEl.getAttribute('id') === pairId) return styleEl;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extracts the KML line color (AABBGGRR hex string) from a Placemark.
+ * Returns lowercase 8-char hex or null.
+ */
+function resolveLineColor(pm, doc) {
+  const style = resolveStyleForPlacemark(pm, doc);
+  if (!style) return null;
+  const lineStyles = style.getElementsByTagName('LineStyle');
+  if (lineStyles.length === 0) return null;
+  const colorEls = lineStyles[0].getElementsByTagName('color');
+  // KML spec: if <LineStyle> exists but no <color>, default is white
+  if (colorEls.length === 0) return 'ffffffff';
+  let hex = colorEls[0].textContent.trim().toLowerCase();
+  // Normalize 6-char colors (no alpha prefix) by prepending 'ff'
+  if (hex.length === 6) hex = 'ff' + hex;
+  if (hex.length === 8) return hex;
+  return null;
+}
+
+/**
+ * Determines if a Placemark represents a water tower / tank.
+ * Detection: icon href contains "star" OR name contains tower/tank/reservoir/etc.
+ */
+function isTowerPlacemark(pm, doc) {
+  // Check name
+  const nameEls = pm.getElementsByTagName('name');
+  if (nameEls.length > 0) {
+    const name = nameEls[0].textContent.toLowerCase();
+    if (/\b(tower|water\s+tower|tank|reservoir|borehole|source)\b/.test(name)) return true;
+  }
+
+  // Check icon href for "star"
+  const style = resolveStyleForPlacemark(pm, doc);
+  if (style) {
+    const iconStyles = style.getElementsByTagName('IconStyle');
+    for (const is of iconStyles) {
+      const iconEls = is.getElementsByTagName('Icon');
+      for (const icon of iconEls) {
+        const hrefEls = icon.getElementsByTagName('href');
+        if (hrefEls.length > 0 && hrefEls[0].textContent.toLowerCase().includes('star')) return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+// ─────────────────────────────────────────────
+//  KML parser
+// ─────────────────────────────────────────────
+function parseKML(kmlText) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(kmlText, 'application/xml');
+
+  const parseErr = doc.querySelector('parsererror');
+  if (parseErr) throw new Error('KML XML is malformed: ' + parseErr.textContent.substring(0, 120));
+
+  const defaultElev = 0;
+  const GRID_CELL = 0.00001; // ~1.1 m grid cell for spatial index
+  const SNAP_TOL_M = parseFloat(document.getElementById('pSnapTol').value) || 2;
+  // Compute snap tolerance in degrees (used for node merging)
+  // We'll refine this once we know midLat, but set a reasonable default
+  let SNAP_DEG = SNAP_TOL_M / 111320; // conservative; refined in PASS 2B
+
+  const nodes = {};
+  const nodeIndex = new Map(); // grid-key → [id, ...] for spatial lookup (multi-entry per cell)
+  const pipes = [];
+  const tanks = []; // tank node IDs (TK1, TK2, ...)
+  let nIdx = 1, pIdx = 1, tkIdx = 1;
+
+  function parseCoords(text) {
+    const result = [];
+    for (const t of text.trim().split(/\s+/)) {
+      if (!t) continue;
+      const p = t.split(',').map(parseFloat);
+      if (p.length >= 2 && !isNaN(p[0]) && !isNaN(p[1])) {
+        // KML-embedded altitudes are ignored — they are often noisy GPS values
+        // or Google Earth terrain clamps that conflict with the Elevation API.
+        // Terrain elevation is provided exclusively by the API / SRTM tiles.
+        // The elevationCache is checked per-coord so re-parses get proper values.
+        const cacheKey = `${p[1].toFixed(6)},${p[0].toFixed(6)}`; // lat,lon
+        const cachedElev = elevationCache.get(cacheKey);
+        result.push({
+          lon: p[0], lat: p[1],
+          elev: (cachedElev !== undefined) ? cachedElev : defaultElev
+        });
+      }
+    }
+    return result;
+  }
+
+  // Search radius in grid cells to cover the snap tolerance
+  function getSearchRadius() {
+    return Math.max(1, Math.ceil(SNAP_DEG / GRID_CELL));
+  }
+
+  function getOrCreate(lon, lat, elev) {
+    // Prefer cached API/SRTM elevation over whatever was passed in
+    const cacheKey = `${lat.toFixed(6)},${lon.toFixed(6)}`;
+    const cachedElev = elevationCache.get(cacheKey);
+    if (cachedElev !== undefined) elev = cachedElev;
+
+    const gx = Math.round(lon / GRID_CELL);
+    const gy = Math.round(lat / GRID_CELL);
+    const radius = getSearchRadius();
+
+    // Search the neighborhood for an existing node within snap tolerance
+    let bestId = null, bestDistSq = Infinity;
+    for (let dx = -radius; dx <= radius; dx++) {
+      for (let dy = -radius; dy <= radius; dy++) {
+        const cellNodes = nodeIndex.get(`${gx + dx}_${gy + dy}`);
+        if (!cellNodes) continue;
+        for (const candidateId of cellNodes) {
+          const n = nodes[candidateId];
+          const dlon = n.lon - lon, dlat = n.lat - lat;
+          const dsq = dlon * dlon + dlat * dlat;
+          if (dsq < bestDistSq) {
+            bestDistSq = dsq;
+            bestId = candidateId;
+          }
+        }
+      }
+    }
+
+    if (bestId !== null && bestDistSq < SNAP_DEG * SNAP_DEG) {
+      const n = nodes[bestId];
+      if ((n.elevation === defaultElev || n.elevation === 0) && elev !== defaultElev && elev !== 0)
+        n.elevation = elev;
+      return bestId;
+    }
+
+    const id = 'J' + nIdx++;
+    nodes[id] = { lon, lat, elevation: elev };
+    const key = `${gx}_${gy}`;
+    if (nodeIndex.has(key)) {
+      nodeIndex.get(key).push(id);
+    } else {
+      nodeIndex.set(key, [id]);
+    }
+    return id;
+  }
+
+  // ════════════════════════════════════════════
+  // PASS 1 — Build raw pipe list from LineStrings.
+  // Only start and end become junction nodes here.
+  // ════════════════════════════════════════════
+  const rawPipes = [];
+
+  for (const ls of doc.getElementsByTagName('LineString')) {
+    const coordEl = ls.getElementsByTagName('coordinates')[0];
+    if (!coordEl) continue;
+
+    const coords = parseCoords(coordEl.textContent);
+    if (coords.length < 2) continue;
+
+    const n1 = getOrCreate(coords[0].lon, coords[0].lat, coords[0].elev);
+    const n2 = getOrCreate(coords[coords.length-1].lon, coords[coords.length-1].lat, coords[coords.length-1].elev);
+    if (n1 === n2) continue;
+
+    let totalLen = 0;
+    const segLens = [];
+    for (let i = 0; i < coords.length - 1; i++) {
+      const d = dist(coords[i].lat, coords[i].lon, coords[i+1].lat, coords[i+1].lon);
+      segLens.push(d);
+      totalLen += d;
+    }
+    if (totalLen < 0.01) continue;
+
+    // Walk up DOM to find parent Placemark and extract line color + name
+    let pmNode = ls.parentNode;
+    while (pmNode && pmNode.tagName !== 'Placemark') pmNode = pmNode.parentNode;
+    const pipeColor = pmNode ? resolveLineColor(pmNode, doc) : null;
+
+    // Extract placemark name and try to parse NUMA naming convention
+    const pmNameEl = pmNode ? pmNode.getElementsByTagName('name')[0] : null;
+    const pmName = pmNameEl ? pmNameEl.textContent.trim() : '';
+    // Matches: "40-P-16-1002", "63-PVC-12-2001", etc.
+    const numaNameMatch = pmName.match(/^(\d+)-[A-Za-z]+-\d+-\d+/);
+    const nameDiam = numaNameMatch ? parseInt(numaNameMatch[1], 10) : null;
+    // Only use diameters ≥ 32mm (per engineering manager's instruction)
+    const validNameDiam = (nameDiam && nameDiam >= 32) ? nameDiam : null;
+
+    rawPipes.push({ n1, n2, coords, segLens, totalLen, color: pipeColor, nameDiam: validNameDiam });
+  }
+
+  // ════════════════════════════════════════════
+  // PASS 2 — Snap Point placemarks to nearest node and apply their elevation.
+  // Runs before pipe splitting so endpoint elevations influence split decisions.
+  // ════════════════════════════════════════════
+  const ELEV_SNAP_M = 50;
+
+  for (const pt of doc.getElementsByTagName('Point')) {
+    const coordEl = pt.getElementsByTagName('coordinates')[0];
+    if (!coordEl) continue;
+
+    const coords = parseCoords(coordEl.textContent);
+    if (coords.length === 0) continue;
+    const pc = coords[0];
+
+    let pointElev = (pc.elev !== defaultElev && pc.elev !== 0) ? pc.elev : null;
+
+    if (pointElev === null) {
+      let placemark = pt.parentNode;
+      while (placemark && placemark.tagName !== 'Placemark') placemark = placemark.parentNode;
+
+      if (placemark) {
+        const nameEl = placemark.getElementsByTagName('name')[0];
+        const descEl = placemark.getElementsByTagName('description')[0];
+        const text = ((nameEl ? nameEl.textContent : '') + ' ' + (descEl ? descEl.textContent : '')).trim();
+
+        const labelledMatch = text.match(/(?:elev(?:ation)?|rl|z|el)[\s=:.]*([+-]?\d+(?:\.\d+)?)/i);
+        if (labelledMatch) {
+          pointElev = parseFloat(labelledMatch[1]);
+        } else {
+          const plainMatch = text.match(/^([+-]?\d+(?:\.\d+)?)\s*m?\s*$/i);
+          if (plainMatch) {
+            pointElev = parseFloat(plainMatch[1]);
+          } else {
+            const anyNumMatch = text.match(/([+-]?\d{2,4}(?:\.\d+)?)\s*m/i);
+            if (anyNumMatch) pointElev = parseFloat(anyNumMatch[1]);
+          }
+        }
+      }
+    }
+
+    if (pointElev === null) continue;
+
+    let bestId = null, bestDist = Infinity;
+    for (const [id, n] of Object.entries(nodes)) {
+      const d = dist(pc.lat, pc.lon, n.lat, n.lon);
+      if (d < bestDist) { bestDist = d; bestId = id; }
+    }
+
+    if (bestId && bestDist <= ELEV_SNAP_M) {
+      if (nodes[bestId].elevation === defaultElev || nodes[bestId].elevation === 0) {
+        nodes[bestId].elevation = pointElev;
+      }
+    }
+  }
+
+  // ════════════════════════════════════════════
+  // PASS 2B — T-Junction / Intersection detection (FIX 2 + FIX 3)
+  //
+  // For each pair of raw pipes, detect:
+  //   (a) Endpoint of pipe A near an interior segment of pipe B (T-junction snap)
+  //   (b) Actual geometric segment-segment intersections (crossings)
+  // Then split affected pipes at the intersection points.
+  // Also trim tiny tail segments (overshoot fix).
+  // ════════════════════════════════════════════
+  {
+    // Convert snap tolerance from meters to approximate degrees
+    const midLat = rawPipes.length > 0
+      ? rawPipes.reduce((s, rp) => s + rp.coords[0].lat, 0) / rawPipes.length
+      : 45;
+    // Update the outer SNAP_DEG so getOrCreate uses the refined value
+    SNAP_DEG = metersToDegrees(SNAP_TOL_M, midLat);
+    const TAIL_MIN_M = 1; // minimum segment length to keep
+
+    // Build bounding boxes for pre-filtering
+    function pipeBBox(rp) {
+      let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+      for (const c of rp.coords) {
+        if (c.lon < minLon) minLon = c.lon;
+        if (c.lon > maxLon) maxLon = c.lon;
+        if (c.lat < minLat) minLat = c.lat;
+        if (c.lat > maxLat) maxLat = c.lat;
+      }
+      return { minLon: minLon - SNAP_DEG, maxLon: maxLon + SNAP_DEG,
+               minLat: minLat - SNAP_DEG, maxLat: maxLat + SNAP_DEG };
+    }
+
+    function bboxOverlap(a, b) {
+      return a.minLon <= b.maxLon && a.maxLon >= b.minLon &&
+             a.minLat <= b.maxLat && a.maxLat >= b.minLat;
+    }
+
+    // Helper: recompute segLens and totalLen for a rawPipe
+    function recomputeLengths(rp) {
+      rp.segLens = [];
+      rp.totalLen = 0;
+      for (let i = 0; i < rp.coords.length - 1; i++) {
+        const d = dist(rp.coords[i].lat, rp.coords[i].lon, rp.coords[i+1].lat, rp.coords[i+1].lon);
+        rp.segLens.push(d);
+        rp.totalLen += d;
+      }
+    }
+
+    // Helper: split a rawPipe at a coord index, returning two new rawPipes
+    // insertIdx is the index in coords where the split point is (or will be inserted)
+    function splitRawPipeAtIndex(rp, splitIdx) {
+      const coords1 = rp.coords.slice(0, splitIdx + 1);
+      const coords2 = rp.coords.slice(splitIdx);
+
+      const c1 = coords1[coords1.length - 1];
+      const c2 = coords2[0];
+
+      // Create junction node at split point
+      const jId = getOrCreate(c1.lon, c1.lat, c1.elev);
+
+      const rp1 = { n1: rp.n1, n2: jId, coords: coords1, segLens: [], totalLen: 0, color: rp.color, nameDiam: rp.nameDiam };
+      const rp2 = { n1: jId, n2: rp.n2, coords: coords2, segLens: [], totalLen: 0, color: rp.color, nameDiam: rp.nameDiam };
+
+      recomputeLengths(rp1);
+      recomputeLengths(rp2);
+
+      return [rp1, rp2];
+    }
+
+    // Helper: insert a point into a rawPipe at a specific segment and parameter,
+    // then split the pipe there
+    function insertAndSplit(rp, segIdx, pt, t) {
+      // Insert the new point into the coords array at segIdx+1
+      const newCoord = {
+        lon: pt.lon, lat: pt.lat,
+        elev: defaultElev
+      };
+
+      // Interpolate elevation if endpoints have real elevation
+      const c0 = rp.coords[segIdx], c1 = rp.coords[segIdx + 1];
+      if (c0.elev !== defaultElev && c0.elev !== 0 && c1.elev !== defaultElev && c1.elev !== 0) {
+        newCoord.elev = c0.elev + t * (c1.elev - c0.elev);
+      } else if (c0.elev !== defaultElev && c0.elev !== 0) {
+        newCoord.elev = c0.elev;
+      } else if (c1.elev !== defaultElev && c1.elev !== 0) {
+        newCoord.elev = c1.elev;
+      }
+
+      const newCoords = [
+        ...rp.coords.slice(0, segIdx + 1),
+        newCoord,
+        ...rp.coords.slice(segIdx + 1)
+      ];
+      rp.coords = newCoords;
+      recomputeLengths(rp);
+
+      // Now split at the inserted index (segIdx + 1)
+      return splitRawPipeAtIndex(rp, segIdx + 1);
+    }
+
+    // Collect all split operations: { pipeIndex, segIdx, point, t }
+    // We'll process them carefully to handle multiple splits on the same pipe
+
+    // Phase A: Endpoint-to-segment snapping (T-junction detection)
+    // Phase B: Segment-segment intersection detection
+    // We collect "split requests" per pipe, then apply them
+
+    // splitsForPipe[pipeIdx] = [ { segIdx, pt: {lon,lat}, t, type } ]
+    const splitsForPipe = rawPipes.map(() => []);
+
+    const bboxes = rawPipes.map(pipeBBox);
+
+    for (let i = 0; i < rawPipes.length; i++) {
+      for (let j = i + 1; j < rawPipes.length; j++) {
+        if (!bboxOverlap(bboxes[i], bboxes[j])) continue;
+
+        const rpA = rawPipes[i], rpB = rawPipes[j];
+
+        // (a) Check endpoints of A against interior segments of B
+        // KEY FIX: Use the endpoint's coordinates (not the projected point)
+        // as the split location, so the split node merges with the existing endpoint.
+        for (const endIdx of [0, rpA.coords.length - 1]) {
+          const ep = rpA.coords[endIdx];
+          for (let si = 0; si < rpB.coords.length - 1; si++) {
+            const sA = rpB.coords[si], sB = rpB.coords[si + 1];
+            const np = nearestPointOnSegment(ep.lon, ep.lat, sA.lon, sA.lat, sB.lon, sB.lat);
+            // Skip if nearest point is at segment endpoints (those are already junction candidates)
+            if (np.t < 0.001 || np.t > 0.999) continue;
+            const dLon = ep.lon - np.lon, dLat = ep.lat - np.lat;
+            if (Math.sqrt(dLon*dLon + dLat*dLat) < SNAP_DEG) {
+              // Use endpoint coords so the split node == the existing endpoint node
+              splitsForPipe[j].push({ segIdx: si, pt: { lon: ep.lon, lat: ep.lat }, t: np.t, type: 'snap' });
+            }
+          }
+        }
+
+        // (a) Check endpoints of B against interior segments of A
+        for (const endIdx of [0, rpB.coords.length - 1]) {
+          const ep = rpB.coords[endIdx];
+          for (let si = 0; si < rpA.coords.length - 1; si++) {
+            const sA = rpA.coords[si], sB = rpA.coords[si + 1];
+            const np = nearestPointOnSegment(ep.lon, ep.lat, sA.lon, sA.lat, sB.lon, sB.lat);
+            if (np.t < 0.001 || np.t > 0.999) continue;
+            const dLon = ep.lon - np.lon, dLat = ep.lat - np.lat;
+            if (Math.sqrt(dLon*dLon + dLat*dLat) < SNAP_DEG) {
+              // Use endpoint coords so the split node == the existing endpoint node
+              splitsForPipe[i].push({ segIdx: si, pt: { lon: ep.lon, lat: ep.lat }, t: np.t, type: 'snap' });
+            }
+          }
+        }
+
+        // (b) Segment-segment intersection
+        for (let si = 0; si < rpA.coords.length - 1; si++) {
+          for (let sj = 0; sj < rpB.coords.length - 1; sj++) {
+            const ix = segmentIntersection(
+              rpA.coords[si].lon, rpA.coords[si].lat,
+              rpA.coords[si+1].lon, rpA.coords[si+1].lat,
+              rpB.coords[sj].lon, rpB.coords[sj].lat,
+              rpB.coords[sj+1].lon, rpB.coords[sj+1].lat
+            );
+            if (ix) {
+              splitsForPipe[i].push({ segIdx: si, pt: { lon: ix.lon, lat: ix.lat }, t: ix.t1, type: 'intersect' });
+              splitsForPipe[j].push({ segIdx: sj, pt: { lon: ix.lon, lat: ix.lat }, t: ix.t2, type: 'intersect' });
+            }
+          }
+        }
+      }
+    }
+
+    // Apply splits: process pipes from last to first to preserve indices
+    // For each pipe, sort splits by segIdx descending then t descending so we can apply from end to start
+    const newRawPipes = [];
+
+    for (let pi = rawPipes.length - 1; pi >= 0; pi--) {
+      const splits = splitsForPipe[pi];
+      if (splits.length === 0) continue;
+
+      // Deduplicate splits that are very close to each other
+      const dedupedSplits = [];
+      // Sort by segIdx then t
+      splits.sort((a, b) => a.segIdx - b.segIdx || a.t - b.t);
+      for (const sp of splits) {
+        const last = dedupedSplits[dedupedSplits.length - 1];
+        if (last && last.segIdx === sp.segIdx && Math.abs(last.t - sp.t) < 0.01) continue;
+        // Also check if the split point is too close to an existing split on a different segment
+        let dup = false;
+        for (const existing of dedupedSplits) {
+          const dLon = existing.pt.lon - sp.pt.lon, dLat = existing.pt.lat - sp.pt.lat;
+          if (Math.sqrt(dLon*dLon + dLat*dLat) < SNAP_DEG * 0.5) { dup = true; break; }
+        }
+        if (!dup) dedupedSplits.push(sp);
+      }
+
+      if (dedupedSplits.length === 0) continue;
+
+      // Apply splits from last to first
+      dedupedSplits.sort((a, b) => b.segIdx - a.segIdx || b.t - a.t);
+
+      let currentPipes = [rawPipes[pi]];
+      for (const sp of dedupedSplits) {
+        // Find which pipe fragment contains this segment
+        const newFragments = [];
+        let splitApplied = false;
+        for (const frag of currentPipes) {
+          if (splitApplied) {
+            newFragments.push(frag);
+            continue;
+          }
+          // Check if this segment index is valid for this fragment
+          if (sp.segIdx < frag.coords.length - 1) {
+            const [p1, p2] = insertAndSplit(frag, sp.segIdx, sp.pt, sp.t);
+            if (p1.totalLen >= 0.01) newFragments.push(p1);
+            if (p2.totalLen >= 0.01) newFragments.push(p2);
+            splitApplied = true;
+          } else {
+            newFragments.push(frag);
+          }
+        }
+        currentPipes = newFragments;
+      }
+
+      // Replace the original rawPipe with the fragments
+      rawPipes.splice(pi, 1, ...currentPipes);
+    }
+
+    // FIX 3: Overshoot trimming
+    // After all junction nodes are established, check each pipe's interior vertices
+    // against all known junction nodes. Split at matching interior junctions.
+    // Also trim tiny tail segments.
+
+    // Build a set of all known junction coordinates for fast lookup
+    const junctionSet = new Map(); // grid-key → { lon, lat, id }
+    for (const [id, n] of Object.entries(nodes)) {
+      const gx = Math.round(n.lon / GRID_CELL);
+      const gy = Math.round(n.lat / GRID_CELL);
+      junctionSet.set(`${gx}_${gy}`, { lon: n.lon, lat: n.lat, id });
+    }
+
+    function findJunctionNear(lon, lat) {
+      const gx = Math.round(lon / GRID_CELL);
+      const gy = Math.round(lat / GRID_CELL);
+      // Expand search radius for snap tolerance
+      const searchRadius = Math.ceil(SNAP_DEG / GRID_CELL);
+      for (let dx = -searchRadius; dx <= searchRadius; dx++) {
+        for (let dy = -searchRadius; dy <= searchRadius; dy++) {
+          const j = junctionSet.get(`${gx + dx}_${gy + dy}`);
+          if (j) {
+            const dLon = j.lon - lon, dLat = j.lat - lat;
+            if (Math.sqrt(dLon*dLon + dLat*dLat) < SNAP_DEG) return j;
+          }
+        }
+      }
+      return null;
+    }
+
+    // Pass over all raw pipes, split at interior vertices that match existing junctions
+    let didSplit = true;
+    let iterations = 0;
+    while (didSplit && iterations < 5) {
+      didSplit = false;
+      iterations++;
+      for (let pi = rawPipes.length - 1; pi >= 0; pi--) {
+        const rp = rawPipes[pi];
+        if (rp.coords.length <= 2) continue;
+
+        // Check interior vertices (not first, not last)
+        for (let ci = 1; ci < rp.coords.length - 1; ci++) {
+          const c = rp.coords[ci];
+          const junc = findJunctionNear(c.lon, c.lat);
+          if (junc) {
+            // Check that this junction is not already the start or end of this pipe
+            const startNode = nodes[rp.n1];
+            const endNode = nodes[rp.n2];
+            if (junc.id === rp.n1 || junc.id === rp.n2) continue;
+
+            // Split pipe at this interior vertex
+            const [p1, p2] = splitRawPipeAtIndex(rp, ci);
+            if (p1.totalLen >= 0.01 && p2.totalLen >= 0.01) {
+              rawPipes.splice(pi, 1, p1, p2);
+              didSplit = true;
+              break; // restart this pipe (it's been replaced)
+            }
+          }
+        }
+      }
+    }
+
+    // Tiny tail trimming: if first or last segment is < TAIL_MIN_M and the
+    // adjacent vertex is near an existing junction, snap and discard the tail
+    for (let pi = rawPipes.length - 1; pi >= 0; pi--) {
+      const rp = rawPipes[pi];
+      if (rp.coords.length < 2) { rawPipes.splice(pi, 1); continue; }
+      if (rp.segLens.length === 0) continue;
+
+      // Check last segment
+      if (rp.segLens.length >= 2) {
+        const lastSegLen = rp.segLens[rp.segLens.length - 1];
+        if (lastSegLen < TAIL_MIN_M) {
+          const prevCoord = rp.coords[rp.coords.length - 2];
+          const junc = findJunctionNear(prevCoord.lon, prevCoord.lat);
+          if (junc && junc.id !== rp.n1) {
+            // Trim: remove last coord, update endpoint to junction
+            rp.coords.pop();
+            rp.segLens.pop();
+            rp.n2 = junc.id;
+            rp.totalLen = rp.segLens.reduce((s, l) => s + l, 0);
+          }
+        }
+      }
+
+      // Check first segment
+      if (rp.segLens.length >= 2) {
+        const firstSegLen = rp.segLens[0];
+        if (firstSegLen < TAIL_MIN_M) {
+          const nextCoord = rp.coords[1];
+          const junc = findJunctionNear(nextCoord.lon, nextCoord.lat);
+          if (junc && junc.id !== rp.n2) {
+            // Trim: remove first coord, update start to junction
+            rp.coords.shift();
+            rp.segLens.shift();
+            rp.n1 = junc.id;
+            rp.totalLen = rp.segLens.reduce((s, l) => s + l, 0);
+          }
+        }
+      }
+
+      // Remove degenerate pipes
+      if (rp.totalLen < 0.01 || rp.n1 === rp.n2) {
+        rawPipes.splice(pi, 1);
+      }
+    }
+  }
+
+  // ════════════════════════════════════════════
+  // PASS 2C — Water Tower / Tank Detection
+  // Detect Point placemarks that represent towers/tanks, create Tank nodes,
+  // and auto-connect each tank to the nearest main pipe segment.
+  // Runs AFTER PASS 2B (T-junction detection) and BEFORE PASS 3 (splitting).
+  // ════════════════════════════════════════════
+  {
+    const TANK_MAX_DIST = parseFloat(document.getElementById('pTankMaxDist').value) || 500;
+
+    for (const pt of doc.getElementsByTagName('Point')) {
+      // Walk up to parent Placemark
+      let pm = pt.parentNode;
+      while (pm && pm.tagName !== 'Placemark') pm = pm.parentNode;
+      if (!pm) continue;
+
+      // Check if this placemark is a tower
+      if (!isTowerPlacemark(pm, doc)) continue;
+
+      // Extract coordinates
+      const coordEl = pt.getElementsByTagName('coordinates')[0];
+      if (!coordEl) continue;
+      const pcoords = parseCoords(coordEl.textContent);
+      if (pcoords.length === 0) continue;
+      const pc = pcoords[0];
+
+      // Extract name
+      const towerNameEls = pm.getElementsByTagName('name');
+      const towerName = towerNameEls.length > 0 ? towerNameEls[0].textContent.trim() : 'Tower';
+
+      // Find nearest point on any rawPipe segment
+      let bestDist = Infinity;
+      let bestPipeIdx = -1;
+      let bestNp = null;
+
+      for (let pi = 0; pi < rawPipes.length; pi++) {
+        const rp = rawPipes[pi];
+        for (let si = 0; si < rp.coords.length - 1; si++) {
+          const sA = rp.coords[si], sB = rp.coords[si + 1];
+          const np = nearestPointOnSegment(pc.lon, pc.lat, sA.lon, sA.lat, sB.lon, sB.lat);
+          const d = dist(pc.lat, pc.lon, np.lat, np.lon);
+          if (d < bestDist) {
+            bestDist = d;
+            bestPipeIdx = pi;
+            bestNp = { lon: np.lon, lat: np.lat, t: np.t, segIdx: si };
+          }
+        }
+      }
+
+      if (bestPipeIdx === -1 || bestDist > TANK_MAX_DIST) {
+        console.warn(`Tank "${towerName}" skipped — nearest pipe is ${bestDist.toFixed(0)} m away (max ${TANK_MAX_DIST} m)`);
+        continue;
+      }
+
+      // Create tank node — deliberately NOT added to nodeIndex so getOrCreate
+      // won't merge the split junction with the tank (which would put it inline).
+      const tkId = 'TK' + tkIdx++;
+      const towerElev = (pc.elev !== defaultElev && pc.elev !== 0) ? pc.elev : defaultElev;
+      nodes[tkId] = { lon: pc.lon, lat: pc.lat, elevation: towerElev, type: 'tank', name: towerName };
+      tanks.push(tkId);
+
+      // Determine connection node — always split pipe to create a proper T-junction.
+      // Previous code used rp.n1/rp.n2 shortcuts when t≈0 or t≈1, but those refer to
+      // endpoints of the ENTIRE rawPipe, not the specific segment, causing wrong connections.
+      const rp = rawPipes[bestPipeIdx];
+      let connNode;
+
+      // Snap to exact vertex coordinates when t is near 0 or 1 to avoid floating-point drift
+      let connLon, connLat, connElev;
+      if (bestNp.t <= 0.02) {
+        const sv = rp.coords[bestNp.segIdx];
+        connLon = sv.lon; connLat = sv.lat; connElev = sv.elev || defaultElev;
+      } else if (bestNp.t >= 0.98) {
+        const sv = rp.coords[bestNp.segIdx + 1];
+        connLon = sv.lon; connLat = sv.lat; connElev = sv.elev || defaultElev;
+      } else {
+        connLon = bestNp.lon; connLat = bestNp.lat;
+        const c0 = rp.coords[bestNp.segIdx], c1 = rp.coords[bestNp.segIdx + 1];
+        connElev = (c0.elev !== defaultElev && c0.elev !== 0 && c1.elev !== defaultElev && c1.elev !== 0)
+          ? c0.elev + bestNp.t * (c1.elev - c0.elev) : defaultElev;
+      }
+      connNode = getOrCreate(connLon, connLat, connElev);
+
+      // Split the raw pipe at the connection point
+      const splitCoord = { lon: connLon, lat: connLat, elev: connElev };
+      const newCoords1 = [...rp.coords.slice(0, bestNp.segIdx + 1), splitCoord];
+      const newCoords2 = [splitCoord, ...rp.coords.slice(bestNp.segIdx + 1)];
+      const rp1 = { n1: rp.n1, n2: connNode, coords: newCoords1, segLens: [], totalLen: 0, color: rp.color, nameDiam: rp.nameDiam };
+      const rp2 = { n1: connNode, n2: rp.n2, coords: newCoords2, segLens: [], totalLen: 0, color: rp.color, nameDiam: rp.nameDiam };
+
+      for (const half of [rp1, rp2]) {
+        for (let i = 0; i < half.coords.length - 1; i++) {
+          const d = dist(half.coords[i].lat, half.coords[i].lon, half.coords[i+1].lat, half.coords[i+1].lon);
+          half.segLens.push(d);
+          half.totalLen += d;
+        }
+      }
+
+      // Replace original pipe with two halves (degenerate halves filtered by PASS 3/4)
+      rawPipes.splice(bestPipeIdx, 1, rp1, rp2);
+
+      // Add a service pipe from tank to connection node
+      const serviceDist = dist(pc.lat, pc.lon, nodes[connNode].lat, nodes[connNode].lon);
+      rawPipes.push({
+        n1: tkId,
+        n2: connNode,
+        coords: [{ lon: pc.lon, lat: pc.lat, elev: towerElev }, { lon: nodes[connNode].lon, lat: nodes[connNode].lat, elev: nodes[connNode].elevation }],
+        segLens: [serviceDist],
+        totalLen: serviceDist,
+        color: null,
+        nameDiam: null,
+        isTankConn: true
+      });
+    }
+  }
+
+  // ════════════════════════════════════════════
+  // PASS 3 — Split pipes by max segment length and elevation change.
+  // Uses endpoint node elevation (updated by PASS 2) as the split baseline.
+  // ════════════════════════════════════════════
+  const maxSegLen    = parseFloat(document.getElementById('pMaxSeg').value)    || 500;
+  const elevSplitThr = parseFloat(document.getElementById('pElevSplit').value) || 3;
+
+  // ── Step 3a: Densify — walk along the entire pipe's cumulative distance
+  //    and insert a vertex every maxSegLen meters so the split logic has cut points.
+  //    This works across original KML vertices so no segment exceeds maxSegLen.
+  for (const rp of rawPipes) {
+    if (rp.totalLen <= maxSegLen) continue; // short pipe, nothing to densify
+
+    // Build cumulative distance array
+    const cumDist = [0];
+    for (let i = 0; i < rp.segLens.length; i++) {
+      cumDist.push(cumDist[i] + rp.segLens[i]);
+    }
+
+    const newCoords = [rp.coords[0]];
+    let nextCut = maxSegLen;   // next distance along pipe to insert a vertex
+    let segIdx = 0;            // current segment index
+
+    while (nextCut < rp.totalLen - 0.01) {
+      // Advance segIdx so cumDist[segIdx+1] >= nextCut
+      while (segIdx < rp.segLens.length - 1 && cumDist[segIdx + 1] < nextCut - 0.01) {
+        segIdx++;
+        newCoords.push(rp.coords[segIdx]); // keep original KML vertex
+      }
+
+      // Interpolate within the current segment
+      const c0 = rp.coords[segIdx], c1 = rp.coords[segIdx + 1];
+      const segStart = cumDist[segIdx], segEnd = cumDist[segIdx + 1];
+      const frac = (segEnd > segStart) ? (nextCut - segStart) / (segEnd - segStart) : 0;
+
+      // Don't insert if very close to an existing coord (within 1m)
+      const distToSegStart = nextCut - segStart;
+      const distToSegEnd = segEnd - nextCut;
+      if (distToSegStart > 1 && distToSegEnd > 1) {
+        const hasE0 = c0.elev !== 0 && c0.elev !== defaultElev;
+        const hasE1 = c1.elev !== 0 && c1.elev !== defaultElev;
+        newCoords.push({
+          lon: c0.lon + frac * (c1.lon - c0.lon),
+          lat: c0.lat + frac * (c1.lat - c0.lat),
+          elev: (hasE0 && hasE1) ? c0.elev + frac * (c1.elev - c0.elev)
+              : hasE0 ? c0.elev : hasE1 ? c1.elev : defaultElev
+        });
+      }
+      nextCut += maxSegLen;
+    }
+
+    // Add any remaining original vertices
+    for (let i = segIdx + 1; i < rp.coords.length; i++) {
+      // Avoid duplicating the last vertex pushed from interpolation
+      const last = newCoords[newCoords.length - 1];
+      const c = rp.coords[i];
+      const dlon = c.lon - last.lon, dlat = c.lat - last.lat;
+      if (Math.sqrt(dlon*dlon + dlat*dlat) > GRID_CELL * 0.5) {
+        newCoords.push(c);
+      }
+    }
+
+    rp.coords = newCoords;
+    // Recompute segLens after densification
+    rp.segLens = [];
+    rp.totalLen = 0;
+    for (let i = 0; i < rp.coords.length - 1; i++) {
+      const d = dist(rp.coords[i].lat, rp.coords[i].lon, rp.coords[i+1].lat, rp.coords[i+1].lon);
+      rp.segLens.push(d);
+      rp.totalLen += d;
+    }
+  }
+
+  // ── Step 3b: Walk vertices and mark split points
+  for (const rp of rawPipes) {
+    const { coords, segLens } = rp;
+    const splitIndices = [0];
+
+    let distSinceSplit = 0;
+    // Seed with node elevation from PASS 2 if available; fall back to raw coord
+    const startNodeElev = nodes[rp.n1].elevation;
+    let elevAtLastSplit = (startNodeElev !== 0 && startNodeElev !== defaultElev)
+      ? startNodeElev : coords[0].elev;
+
+    for (let i = 0; i < segLens.length; i++) {
+      distSinceSplit += segLens[i];
+      const elevHere = coords[i + 1].elev;
+      const elevChange = Math.abs(elevHere - elevAtLastSplit);
+      const hasRealElev = elevHere !== 0 && elevHere !== defaultElev;
+
+      if (distSinceSplit >= maxSegLen * 0.99 || (hasRealElev && elevChange >= elevSplitThr)) {
+        splitIndices.push(i + 1);
+        distSinceSplit = 0;
+        elevAtLastSplit = elevHere;
+      }
+    }
+
+    if (splitIndices[splitIndices.length - 1] !== coords.length - 1)
+      splitIndices.push(coords.length - 1);
+
+    for (let s = 0; s < splitIndices.length - 1; s++) {
+      const iStart = splitIndices[s];
+      const iEnd   = splitIndices[s + 1];
+      const c1 = coords[iStart], c2 = coords[iEnd];
+
+      const interpElev = (c2.elev !== 0 && c2.elev !== defaultElev) ? c2.elev : defaultElev;
+
+      const nodeId1 = (s === 0)
+        ? rp.n1
+        : getOrCreate(c1.lon, c1.lat, (c1.elev !== 0 && c1.elev !== defaultElev) ? c1.elev : defaultElev);
+      const nodeId2 = (s === splitIndices.length - 2)
+        ? rp.n2
+        : getOrCreate(c2.lon, c2.lat, interpElev);
+
+      if (nodeId1 === nodeId2) continue;
+
+      let subLen = 0;
+      for (let k = iStart; k < iEnd; k++) subLen += segLens[k];
+      // Tank connection pipes (isTankConn) may have ~0 length when the tower
+      // sits exactly on a pipe vertex. Keep them with a minimum 0.1 m length
+      // so the tank stays connected as a branch, not collapsed away.
+      if (subLen < 0.01) {
+        if (rp.isTankConn) {
+          subLen = 0.1;
+        } else {
+          continue;
+        }
+      }
+
+      const vertices = [];
+      for (let k = iStart + 1; k < iEnd; k++)
+        vertices.push({ lon: coords[k].lon, lat: coords[k].lat });
+
+      pipes.push({ id: 'P' + pIdx++, n1: nodeId1, n2: nodeId2, length: subLen, vertices, color: rp.color || null, nameDiam: rp.nameDiam || null });
+    }
+  }
+
+  // ════════════════════════════════════════════
+  // PASS 4 — Final node merge: collapse any remaining
+  // node pairs within snap tolerance into a single node.
+  // This catches gaps where two nodes ended up close
+  // but not at identical coordinates.
+  // IMPORTANT: Tank nodes (TK*) are excluded from merging so they
+  // stay as distinct branch endpoints and never get collapsed inline.
+  // ════════════════════════════════════════════
+  {
+    const nodeIds = Object.keys(nodes);
+    const mergeMap = {}; // oldId → survivorId
+    const tankSet = new Set(tanks); // O(1) lookup for tank nodes
+
+    // Build a spatial grid for fast lookup
+    const mergeGrid = new Map();
+    const mRadius = Math.max(1, Math.ceil(SNAP_DEG / GRID_CELL));
+    for (const id of nodeIds) {
+      const n = nodes[id];
+      const gx = Math.round(n.lon / GRID_CELL);
+      const gy = Math.round(n.lat / GRID_CELL);
+      const key = `${gx}_${gy}`;
+      if (mergeGrid.has(key)) mergeGrid.get(key).push(id);
+      else mergeGrid.set(key, [id]);
+    }
+
+    for (const id of nodeIds) {
+      if (mergeMap[id]) continue; // already merged away
+      if (tankSet.has(id)) continue; // never merge a tank into something else
+      const n = nodes[id];
+      const gx = Math.round(n.lon / GRID_CELL);
+      const gy = Math.round(n.lat / GRID_CELL);
+
+      for (let dx = -mRadius; dx <= mRadius; dx++) {
+        for (let dy = -mRadius; dy <= mRadius; dy++) {
+          const cellNodes = mergeGrid.get(`${gx + dx}_${gy + dy}`);
+          if (!cellNodes) continue;
+          for (const otherId of cellNodes) {
+            if (otherId === id || mergeMap[otherId]) continue;
+            if (tankSet.has(otherId)) continue; // never merge anything into a tank
+            const o = nodes[otherId];
+            const dlon = n.lon - o.lon, dlat = n.lat - o.lat;
+            if (Math.sqrt(dlon*dlon + dlat*dlat) < SNAP_DEG) {
+              // Merge otherId into id (id is the survivor)
+              mergeMap[otherId] = id;
+              // Preserve elevation if the survivor has none
+              if ((n.elevation === 0 || n.elevation === defaultElev) &&
+                  o.elevation !== 0 && o.elevation !== defaultElev) {
+                n.elevation = o.elevation;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Resolve transitive merges: if A→B and B→C, resolve A→C
+    function resolve(id) {
+      let target = id;
+      while (mergeMap[target]) target = mergeMap[target];
+      return target;
+    }
+
+    const mergeCount = Object.keys(mergeMap).length;
+    if (mergeCount > 0) {
+      // Rewrite all pipe endpoint references
+      for (const p of pipes) {
+        p.n1 = resolve(p.n1);
+        p.n2 = resolve(p.n2);
+      }
+
+      // Rewrite tank IDs if any were merged
+      for (let ti = 0; ti < tanks.length; ti++) {
+        tanks[ti] = resolve(tanks[ti]);
+      }
+
+      // Remove merged nodes
+      for (const deadId of Object.keys(mergeMap)) {
+        delete nodes[deadId];
+      }
+
+      // Remove degenerate pipes (same start and end after merge)
+      for (let pi = pipes.length - 1; pi >= 0; pi--) {
+        if (pipes[pi].n1 === pipes[pi].n2) pipes.splice(pi, 1);
+      }
+    }
+  }
+
+  // Build colorSet from final pipes (after all splits)
+  const colorSet = new Set(pipes.map(p => p.color).filter(Boolean));
+
+  return { nodes, pipes, tanks, colorSet };
+}
+
+// ─────────────────────────────────────────────
+//  EPANET .inp generator
+// ─────────────────────────────────────────────
+async function generateINP() {
+  if (!network && !lastKmlText) return;
+
+  // Re-parse KML with current parameter values so max segment length,
+  // elevation split threshold, and snap tolerance take effect.
+  if (lastKmlText) {
+    showStatus('Re-processing with current parameters…', 'loading');
+    network = parseKML(lastKmlText);
+    // Re-apply cached elevations (from previous API/SRTM fetch).
+    // Always overwrite since parseCoords now ignores KML altitudes.
+    for (const [id, n] of Object.entries(network.nodes)) {
+      const key = `${n.lat.toFixed(6)},${n.lon.toFixed(6)}`;
+      const cached = elevationCache.get(key);
+      if (cached !== undefined) n.elevation = cached;
+    }
+    // Also re-apply SRTM if tiles are loaded
+    enrichFromSRTM();
+    // Fetch elevations for any new split nodes that have no cached value
+    if (autoElevToggle.checked) {
+      await fetchElevationsFromAPI();
+      // Update cache with new elevations
+      for (const [id, n] of Object.entries(network.nodes)) {
+        if (n.elevation !== 0) {
+          elevationCache.set(`${n.lat.toFixed(6)},${n.lon.toFixed(6)}`, n.elevation);
+        }
+      }
+    }
+    renderMapPreview(); // refresh preview with the re-parsed network
+  }
+
+  const diameter  = document.getElementById('pDiameter').value;
+  const roughness = document.getElementById('pRoughness').value;
+  const demand    = document.getElementById('pDemand').value;
+  const units     = document.getElementById('pUnits').value;
+  const headloss  = document.getElementById('pHeadloss').value;
+  const now       = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+  let roughnessLabel = 'Roughness';
+  if (headloss === 'D-W') roughnessLabel = 'Roughness(mm)';
+  else if (headloss === 'C-M') roughnessLabel = 'N-value   ';
+
+  let s = '';
+
+  const tankCount = (network.tanks && network.tanks.length) || 0;
+  const junctionCount = Object.keys(network.nodes).length - tankCount;
+
+  s += `[TITLE]\n`;
+  s += `Generated by HydroForge (KMZ/KML → EPANET)\n`;
+  s += `Generated: ${now}\n`;
+  s += `Junctions: ${junctionCount}  Pipes: ${network.pipes.length}  Tanks: ${tankCount}\n\n`;
+
+  s += `[JUNCTIONS]\n`;
+  s += `;ID             \tElev    \tDemand  \tPattern\n`;
+  for (const [id, n] of Object.entries(network.nodes)) {
+    if (network.tanks && network.tanks.includes(id)) continue; // tanks go in [TANKS]
+    s += `${id.padEnd(16)}\t${n.elevation.toFixed(2)}\t${demand}\t\n`;
+  }
+  s += `\n`;
+
+  s += `[RESERVOIRS]\n`;
+  s += `;ID             \tHead    \tPattern\n`;
+  s += `;(Add reservoirs manually)\n\n`;
+
+  const tankInit = parseFloat(document.getElementById('pTankInit').value) || 7.0;
+  const tankMin  = parseFloat(document.getElementById('pTankMin').value)  || 5.3;
+  const tankMax  = parseFloat(document.getElementById('pTankMax').value)  || 7.3;
+  const tankDiam = parseFloat(document.getElementById('pTankDiam').value) || 2.4;
+  const tankPresetSel = document.getElementById('pTankPreset');
+  const tankPresetLabel = tankPresetSel.options[tankPresetSel.selectedIndex].text;
+
+  s += `[TANKS]\n`;
+  s += `; Preset: ${tankPresetLabel}\n`;
+  s += `;ID             \tElevation\tInitLevel\tMinLevel\tMaxLevel\tDiameter\tMinVol\tVolCurve\n`;
+  if (network.tanks && network.tanks.length > 0) {
+    for (const tkId of network.tanks) {
+      const tn = network.nodes[tkId];
+      if (!tn) continue;
+      s += `${tkId.padEnd(16)}\t${tn.elevation.toFixed(2)}\t${tankInit}\t${tankMin}\t${tankMax}\t${tankDiam}\t0\t\n`;
+    }
+  } else {
+    s += `;(Add tanks manually)\n`;
+  }
+  s += `\n`;
+
+  // Build color → diameter map from the UI table
+  const colorDiamMap = new Map();
+  for (const inp of document.querySelectorAll('#colorMapTable .color-diam-input')) {
+    const hex = inp.dataset.hex;
+    const d = parseFloat(inp.value);
+    if (hex && !isNaN(d) && d > 0) colorDiamMap.set(hex, d);
+  }
+
+  s += `[PIPES]\n`;
+  s += `;ID              \tNode1           \tNode2           \tLength  \tDiameter\t${roughnessLabel}\tMinorLoss\tStatus\n`;
+  for (const p of network.pipes) {
+    const pipeDiam = (p.color && colorDiamMap.has(p.color))
+      ? colorDiamMap.get(p.color)        // 1st priority: user-set color mapping
+      : (p.nameDiam != null)
+        ? p.nameDiam                     // 2nd priority: parsed from NUMA pipe name
+        : diameter;                      // 3rd fallback: default from UI
+    s += `${p.id.padEnd(16)}\t${p.n1.padEnd(16)}\t${p.n2.padEnd(16)}\t${p.length.toFixed(2)}\t${pipeDiam}\t${roughness}\t0\tOpen\n`;
+  }
+  s += `\n`;
+
+  s += `[PUMPS]\n`;
+  s += `;ID             \tNode1           \tNode2           \tParameters\n`;
+  s += `;(Add pumps manually)\n\n`;
+
+  s += `[VALVES]\n`;
+  s += `;ID             \tNode1           \tNode2           \tDiameter\tType\tSetting\tMinorLoss\n`;
+  s += `;(Add valves manually)\n\n`;
+
+  s += `[TAGS]\n\n`;
+
+  s += `[DEMANDS]\n`;
+  s += `;Junction       \tDemand  \tPattern\t;Category\n\n`;
+
+  s += `[STATUS]\n`;
+  s += `;ID             \tStatus/Setting\n\n`;
+
+  // Flat 24-hour demand pattern (satisfies the Pattern=1 reference in [OPTIONS])
+  s += `[PATTERNS]\n`;
+  s += `;ID             \tMultipliers\n`;
+  s += `1               \t1.0  1.0  1.0  1.0  1.0  1.0\n`;
+  s += `1               \t1.0  1.0  1.0  1.0  1.0  1.0\n`;
+  s += `1               \t1.0  1.0  1.0  1.0  1.0  1.0\n`;
+  s += `1               \t1.0  1.0  1.0  1.0  1.0  1.0\n\n`;
+
+  s += `[CURVES]\n`;
+  s += `;ID             \tX-Value\tY-Value\n\n`;
+
+  s += `[CONTROLS]\n\n`;
+
+  s += `[RULES]\n\n`;
+
+  s += `[ENERGY]\n`;
+  s += `Global Efficiency\t75\n`;
+  s += `Global Price     \t0\n`;
+  s += `Demand Charge    \t0\n\n`;
+
+  s += `[EMITTERS]\n`;
+  s += `;Junction       \tCoefficient\n\n`;
+
+  s += `[QUALITY]\n`;
+  s += `;Node           \tInitQual\n\n`;
+
+  s += `[SOURCES]\n`;
+  s += `;Node           \tType\tQuality\tPattern\n\n`;
+
+  s += `[REACTIONS]\n`;
+  s += `;Type\tPipe/Tank\tCoefficient\n`;
+  s += `Order Bulk\t1\n`;
+  s += `Order Tank\t1\n`;
+  s += `Order Wall\t1\n`;
+  s += `Global Bulk\t0\n`;
+  s += `Global Wall\t0\n`;
+  s += `Limiting Potential\t0\n`;
+  s += `Roughness Correlation\t0\n\n`;
+
+  s += `[MIXING]\n`;
+  s += `;Tank           \tModel\n\n`;
+
+  s += `[TIMES]\n`;
+  s += `Duration           \t24:00\n`;
+  s += `Hydraulic Timestep \t1:00\n`;
+  s += `Quality Timestep   \t0:05\n`;
+  s += `Pattern Timestep   \t1:00\n`;
+  s += `Pattern Start      \t0:00\n`;
+  s += `Report Timestep    \t1:00\n`;
+  s += `Report Start       \t0:00\n`;
+  s += `Start ClockTime    \t12 am\n`;
+  s += `Statistic          \tNone\n\n`;
+
+  s += `[REPORT]\n`;
+  s += `Status\tFull\n`;
+  s += `Summary\tYes\n`;
+  s += `Page\t0\n\n`;
+
+  s += `[OPTIONS]\n`;
+  s += `Units              \t${units}\n`;
+  s += `Headloss           \t${headloss}\n`;
+  s += `Specific Gravity   \t1\n`;
+  s += `Viscosity          \t1\n`;
+  s += `Trials             \t40\n`;
+  s += `Accuracy           \t0.001\n`;
+  s += `CHECKFREQ          \t2\n`;
+  s += `MAXCHECK           \t10\n`;
+  s += `DAMPLIMIT          \t0\n`;
+  s += `Unbalanced         \tContinue 10\n`;
+  s += `Pattern            \t1\n`;
+  s += `Demand Multiplier  \t1.0\n`;
+  s += `Emitter Exponent   \t0.5\n`;
+  s += `Quality            \tNone mg/L\n`;
+  s += `Diffusivity        \t1\n`;
+  s += `Tolerance          \t0.01\n\n`;
+
+  // Bounding box with 5% padding.
+  // Computed with an explicit loop, not Math.min(...spread) — spreading a
+  // large node array into call arguments overflows the stack (~100k+ nodes).
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const n of Object.values(network.nodes)) {
+    if (n.lon < minX) minX = n.lon;
+    if (n.lon > maxX) maxX = n.lon;
+    if (n.lat < minY) minY = n.lat;
+    if (n.lat > maxY) maxY = n.lat;
+  }
+  const padX = Math.max((maxX - minX) * 0.05, 0.001);
+  const padY = Math.max((maxY - minY) * 0.05, 0.001);
+
+  s += `[COORDINATES]\n`;
+  s += `;Node           \tX-Coord         \tY-Coord\n`;
+  for (const [id, n] of Object.entries(network.nodes))
+    s += `${id.padEnd(16)}\t${n.lon.toFixed(6)}\t${n.lat.toFixed(6)}\n`;
+  s += `\n`;
+
+  s += `[VERTICES]\n`;
+  s += `;Link           \tX-Coord         \tY-Coord\n`;
+  for (const p of network.pipes) {
+    if (p.vertices && p.vertices.length > 0) {
+      for (const v of p.vertices)
+        s += `${p.id.padEnd(16)}\t${v.lon.toFixed(6)}\t${v.lat.toFixed(6)}\n`;
+    }
+  }
+  s += `\n`;
+
+  s += `[LABELS]\n`;
+  s += `;X-Coord\tY-Coord\tLabel & Anchor Node\n\n`;
+
+  // Optional satellite backdrop — fetched before writing [BACKDROP] so the
+  // FILE field can reference it. Failure degrades to an INP without backdrop.
+  let backdropFile = '', backdropError = null, backdropBlob = null;
+  if (backdropToggle && backdropToggle.checked) {
+    try {
+      const bd = await generateSatelliteBackdrop(minX - padX, minY - padY, maxX + padX, maxY + padY);
+      backdropFile = bd.filename; backdropBlob = bd.blob;
+    } catch (err) {
+      backdropError = err.message || String(err);
+      console.warn('Satellite backdrop failed:', err);
+    }
+  }
+
+  s += `[BACKDROP]\n`;
+  s += `DIMENSIONS\t${(minX - padX).toFixed(6)}\t${(minY - padY).toFixed(6)}\t${(maxX + padX).toFixed(6)}\t${(maxY + padY).toFixed(6)}\n`;
+  s += `UNITS\tDegrees\n`;
+  s += `FILE\t${backdropFile}\n`;
+  s += `OFFSET\t0\t0\n\n`;
+
+  s += `[END]\n`;
+
+  // Download the .inp, plus the backdrop as a second file (default path — ready
+  // to use, no unzip needed). downloadBlob defers URL revocation so large files
+  // aren't cut off mid-download.
+  downloadBlob(new Blob([s], { type: 'text/plain;charset=utf-8' }), 'network.inp');
+  if (backdropBlob) downloadBlob(backdropBlob, backdropFile);
+
+  // Stash for the optional ZIP bundle and reveal the button when there's a
+  // backdrop to keep paired with the model.
+  lastExport = { inpText: s, inpName: 'network.inp', bmpBlob: backdropBlob, bmpName: backdropFile };
+  zipBtn.classList.toggle('hidden', !backdropBlob);
+
+  if (backdropFile) {
+    showStatus('✓ Downloaded network.inp + network_backdrop.bmp. Keep them in the same folder and don’t rename — open the .inp in EPANET and the satellite backdrop loads automatically (no unzip needed). Use “Download as ZIP” to keep the pair together when moving or emailing them.', 'success');
+  } else if (backdropError) {
+    showStatus(`✓ network.inp downloaded — but the satellite backdrop failed: ${backdropError}`, 'warn');
+  } else {
+    showStatus('✓ network.inp downloaded! Open it in EPANET 2 or EPANET 2.2.', 'success');
+  }
+}
+</script>
+</body>
+</html>
