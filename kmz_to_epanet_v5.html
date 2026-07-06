@@ -1031,6 +1031,200 @@ function parseKML(kmlText) {
   }
 
   // ════════════════════════════════════════════
+  // PASS 2.5 — T-junction snapping & pipe-crossing detection.
+  // Ensures pipes that meet mid-span share a common junction node,
+  // eliminating overshoots and near-miss gaps.
+  // ════════════════════════════════════════════
+  const T_SNAP_M = 8; // metres — snap tolerance
+
+  function projectOnSeg(px, py, ax, ay, bx, by) {
+    const dx = bx - ax, dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    if (len2 < 1e-20) return { t: 0, x: ax, y: ay };
+    let t = ((px - ax) * dx + (py - ay) * dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    return { t, x: ax + t * dx, y: ay + t * dy };
+  }
+
+  function segCross(ax1, ay1, ax2, ay2, bx1, by1, bx2, by2) {
+    const dax = ax2 - ax1, day = ay2 - ay1;
+    const dbx = bx2 - bx1, dby = by2 - by1;
+    const det = dax * dby - day * dbx;
+    if (Math.abs(det) < 1e-20) return null;
+    const t = ((bx1 - ax1) * dby - (by1 - ay1) * dbx) / det;
+    const u = ((bx1 - ax1) * day - (by1 - ay1) * dax) / det;
+    const EPS = 0.005;
+    if (t > EPS && t < 1 - EPS && u > EPS && u < 1 - EPS)
+      return { x: ax1 + t * dax, y: ay1 + t * day, t, u };
+    return null;
+  }
+
+  function recalcLens(rp) {
+    rp.segLens = []; rp.totalLen = 0;
+    for (let i = 0; i < rp.coords.length - 1; i++) {
+      const d = dist(rp.coords[i].lat, rp.coords[i].lon, rp.coords[i+1].lat, rp.coords[i+1].lon);
+      rp.segLens.push(d); rp.totalLen += d;
+    }
+  }
+
+  // --- Phase A: Node-on-pipe detection ---
+  // For every existing node, check if it lies on or near the interior
+  // of any pipe that doesn't already connect to it. If so, split that
+  // pipe and snap the node onto the pipe's polyline.
+  const pipeSplits = new Map();
+  const nodeSnaps = new Map(); // nodeId → {lon, lat} to move node onto pipe
+  const nodeList = Object.entries(nodes);
+
+  for (let b = 0; b < rawPipes.length; b++) {
+    const rpB = rawPipes[b];
+    const bN1 = nodes[rpB.n1], bN2 = nodes[rpB.n2];
+
+    for (const [nid, node] of nodeList) {
+      if (rpB.n1 === nid || rpB.n2 === nid) continue;
+
+      // Find closest point on pipe B's polyline to this node
+      let best = { dist: Infinity };
+      for (let j = 0; j < rpB.coords.length - 1; j++) {
+        const c1 = rpB.coords[j], c2 = rpB.coords[j + 1];
+        const proj = projectOnSeg(node.lon, node.lat, c1.lon, c1.lat, c2.lon, c2.lat);
+        const d = dist(node.lat, node.lon, proj.y, proj.x);
+        if (d < best.dist) best = { dist: d, segIdx: j, t: proj.t, lon: proj.x, lat: proj.y };
+      }
+
+      if (best.dist >= T_SNAP_M) continue;
+
+      // Skip if projection falls near pipe B's start or end node
+      if (dist(best.lat, best.lon, bN1.lat, bN1.lon) < 2) continue;
+      if (dist(best.lat, best.lon, bN2.lat, bN2.lon) < 2) continue;
+
+      // Record split on pipe B using the existing node
+      if (!pipeSplits.has(b)) pipeSplits.set(b, []);
+      pipeSplits.get(b).push({
+        segIdx: best.segIdx, t: best.t,
+        lon: best.lon, lat: best.lat, nodeId: nid
+      });
+
+      // If node is noticeably off the pipe, snap it onto the pipe
+      if (best.dist > 0.5 && !nodeSnaps.has(nid)) {
+        nodeSnaps.set(nid, { lon: best.lon, lat: best.lat });
+      }
+    }
+  }
+
+  // Apply node position snaps so geometry is clean
+  for (const [nid, pos] of nodeSnaps) {
+    nodes[nid].lon = pos.lon;
+    nodes[nid].lat = pos.lat;
+    for (const rp of rawPipes) {
+      if (rp.n1 === nid) rp.coords[0] = { lon: pos.lon, lat: pos.lat, elev: rp.coords[0].elev };
+      if (rp.n2 === nid) {
+        const last = rp.coords.length - 1;
+        rp.coords[last] = { lon: pos.lon, lat: pos.lat, elev: rp.coords[last].elev };
+      }
+    }
+  }
+
+  // Recalculate all pipe lengths after snaps
+  for (const rp of rawPipes) recalcLens(rp);
+
+  // --- Phase B: Detect interior-to-interior crossings ---
+  for (let a = 0; a < rawPipes.length; a++) {
+    const cA = rawPipes[a].coords;
+    for (let b = a + 1; b < rawPipes.length; b++) {
+      const cB = rawPipes[b].coords;
+      for (let i = 0; i < cA.length - 1; i++) {
+        for (let j = 0; j < cB.length - 1; j++) {
+          const ix = segCross(
+            cA[i].lon, cA[i].lat, cA[i+1].lon, cA[i+1].lat,
+            cB[j].lon, cB[j].lat, cB[j+1].lon, cB[j+1].lat
+          );
+          if (ix) {
+            const crossNodeId = getOrCreate(ix.x, ix.y, defaultElev);
+            if (!pipeSplits.has(a)) pipeSplits.set(a, []);
+            if (!pipeSplits.has(b)) pipeSplits.set(b, []);
+            pipeSplits.get(a).push({ segIdx: i, t: ix.t, lon: ix.x, lat: ix.y, nodeId: crossNodeId });
+            pipeSplits.get(b).push({ segIdx: j, t: ix.u, lon: ix.x, lat: ix.y, nodeId: crossNodeId });
+          }
+        }
+      }
+    }
+  }
+
+  // --- Phase C: Apply all splits ---
+  const newRawPipes = [];
+  for (let i = 0; i < rawPipes.length; i++) {
+    if (!pipeSplits.has(i) || pipeSplits.get(i).length === 0) {
+      newRawPipes.push(rawPipes[i]);
+      continue;
+    }
+
+    const rp = rawPipes[i];
+    const splits = pipeSplits.get(i);
+    splits.sort((a, b) => a.segIdx - b.segIdx || a.t - b.t);
+
+    // Deduplicate splits within 1 m of each other
+    const dedup = [splits[0]];
+    for (let s = 1; s < splits.length; s++) {
+      const prev = dedup[dedup.length - 1];
+      if (dist(splits[s].lat, splits[s].lon, prev.lat, prev.lon) < 1) continue;
+      dedup.push(splits[s]);
+    }
+
+    // Build augmented coord array with split points inserted
+    const aug = [];
+    const splitPos = [];
+    let segStart = 0;
+
+    for (const sp of dedup) {
+      for (let k = segStart; k <= sp.segIdx; k++) aug.push(rp.coords[k]);
+      // Avoid duplicate point if split is at an existing vertex
+      const lastAug = aug[aug.length - 1];
+      if (lastAug && dist(sp.lat, sp.lon, lastAug.lat, lastAug.lon) < 0.5) {
+        // Split coincides with the vertex we just pushed — use it as the split point
+        splitPos.push({ idx: aug.length - 1, nodeId: sp.nodeId });
+      } else {
+        aug.push({ lon: sp.lon, lat: sp.lat, elev: defaultElev });
+        splitPos.push({ idx: aug.length - 1, nodeId: sp.nodeId });
+      }
+      segStart = sp.segIdx + 1;
+    }
+    for (let k = segStart; k < rp.coords.length; k++) aug.push(rp.coords[k]);
+
+    // Check if the next coord after split also duplicates
+    // (handles split at t≈1.0 where the split point ≈ coords[segIdx+1])
+    // This is handled naturally since sub-pipes with len < 0.01 are dropped.
+
+    // Create sub-pipes between consecutive split points
+    let prevIdx = 0, prevNode = rp.n1;
+    for (const sp of splitPos) {
+      const sub = aug.slice(prevIdx, sp.idx + 1);
+      if (sub.length >= 2) {
+        let len = 0; const sLens = [];
+        for (let k = 0; k < sub.length - 1; k++) {
+          const d = dist(sub[k].lat, sub[k].lon, sub[k+1].lat, sub[k+1].lon);
+          sLens.push(d); len += d;
+        }
+        if (len >= 0.01) newRawPipes.push({ n1: prevNode, n2: sp.nodeId, coords: sub, segLens: sLens, totalLen: len });
+      }
+      prevIdx = sp.idx;
+      prevNode = sp.nodeId;
+    }
+    // Final sub-pipe
+    const sub = aug.slice(prevIdx);
+    if (sub.length >= 2) {
+      let len = 0; const sLens = [];
+      for (let k = 0; k < sub.length - 1; k++) {
+        const d = dist(sub[k].lat, sub[k].lon, sub[k+1].lat, sub[k+1].lon);
+        sLens.push(d); len += d;
+      }
+      if (len >= 0.01) newRawPipes.push({ n1: prevNode, n2: rp.n2, coords: sub, segLens: sLens, totalLen: len });
+    }
+  }
+
+  rawPipes.length = 0;
+  rawPipes.push(...newRawPipes);
+
+  // ════════════════════════════════════════════
   // PASS 3 — Split pipes by max segment length and elevation change.
   // Uses endpoint node elevation (updated by PASS 2) as the split baseline.
   // ════════════════════════════════════════════
